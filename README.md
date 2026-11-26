@@ -83,7 +83,7 @@ Prasyarat:
 
 - Node.js **≥ 22.11**
 - JDK **17**
-- Android SDK (platform 37, build-tools 37.0.0) + `ANDROID_HOME` yang valid
+- Android SDK (platform 36, build-tools 36.0.0) + `ANDROID_HOME` yang valid
 - Perangkat/emulator Android
 
 ```bash
