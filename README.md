@@ -1,8 +1,8 @@
 # Nexus Lock Screen
 
-Layar kunci Android alternatif dengan orientasi **landscape**, tema gelap Material You,
+Launcher Android alternatif dengan orientasi **landscape**, tema gelap Material You,
 wallpaper pilihan sendiri (Smart Crop), jam real-time, status baterai/jaringan, serta
-gesture swipe-up untuk keluar dari layar kunci.
+gesture swipe-up untuk membuka pustaka aplikasi bergaya Steam.
 
 Dibangun dengan **React Native 0.88 + TypeScript** untuk UI dan **Kotlin** untuk integrasi
 sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Android Studio.
@@ -22,13 +22,16 @@ sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Andro
 | Jam digital 24 jam | ✅ | Update tepat per menit + refresh saat resume |
 | Tanggal Bahasa Indonesia | ✅ | Format manual, tidak bergantung locale perangkat |
 | Widget baterai | ✅ | Level, status charging, sumber daya, progress bar |
-| Swipe-up unlock | ✅ | Threshold jarak/kecepatan + animasi mengikuti jari |
+| Swipe-up ke app drawer | ✅ | Threshold jarak/kecepatan + animasi mengikuti jari |
+| Launcher default (HOME) | ✅ | Dipilih lewat dialog Home Android; mendukung landscape terbalik |
+| App drawer bergaya Steam | ✅ | Semua aplikasi + pencarian, kartu 16:9, ikon asli |
+| Dynamic Color wallpaper | ✅ | Android 12+; fallback ke palette PRD bila tidak tersedia |
 | Senter | ✅ | Camera2 torch, menangani perangkat tanpa flash |
 | Shortcut kamera | ✅ | Intent kamera sistem, menangani kamera tidak tersedia |
 | Info jaringan | ✅ | Wi-Fi / seluler / ethernet / VPN, generasi seluler bila diizinkan OS |
 
-Fitur future sesuai PRD (cuaca real-time, tema kustom, wallpaper animasi, widget musik,
-notifikasi, game launcher) belum termasuk MVP.
+Fitur future sesuai PRD (cuaca real-time, wallpaper animasi, widget musik, notifikasi)
+belum termasuk MVP.
 
 ---
 
@@ -121,6 +124,11 @@ Untuk setiap push ke `main`/`master`, APK debug juga dipublikasikan ke
 [GitHub Release `latest-debug`](https://github.com/penyatirhandal/screenby/releases/tag/latest-debug)
 dengan nama aset `NexusLockScreen-debug.apk`, sehingga bisa diunduh tanpa login GitHub.
 Aset akan ditimpa otomatis pada push berikutnya.
+
+### Menjadikan launcher default
+
+Setelah APK terpasang, tekan tombol **Home**, pilih **Nexus Lock Screen**, lalu pilih
+**Always**. Orientasi mengikuti sensor: landscape dan landscape terbalik keduanya didukung.
 
 ### Release bertanda tangan (opsional)
 

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppDrawer } from '../components/AppDrawer';
 import { BatteryCard } from '../components/BatteryCard';
 import { ClockWidget } from '../components/ClockWidget';
 import { ShortcutButton } from '../components/ShortcutButton';
@@ -30,6 +31,7 @@ import { useNetwork } from '../hooks/useNetwork';
 import { useWallpaper } from '../hooks/useWallpaper';
 import { NexusNative } from '../services/NexusNative';
 import { colors } from '../theme/colors';
+import { useLauncherPalette } from '../theme/ThemeContext';
 import type { CropState } from '../types';
 import { computeCoverLayout } from '../utils/smartCrop';
 
@@ -40,6 +42,7 @@ function toMessage(error: unknown): string {
 export function LockScreen(): React.JSX.Element {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const palette = useLauncherPalette();
 
   const clock = useClock();
   const battery = useBattery();
@@ -52,6 +55,7 @@ export function LockScreen(): React.JSX.Element {
   } = useFlashlight();
 
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
 
   const exitProgress = useRef(new Animated.Value(0)).current;
@@ -93,24 +97,17 @@ export function LockScreen(): React.JSX.Element {
       () => {
         if (sheetVisible) {
           setSheetVisible(false);
+        } else if (drawerVisible) {
+          setDrawerVisible(false);
         }
-        // The lock screen only exits through the swipe-up gesture.
+        // A launcher stays on the home screen when Back is pressed.
         return true;
       },
     );
     return () => subscription.remove();
-  }, [sheetVisible]);
+  }, [drawerVisible, sheetVisible]);
 
-  const resetExit = useCallback(() => {
-    unlockingRef.current = false;
-    Animated.timing(exitProgress, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [exitProgress]);
-
-  const handleUnlock = useCallback(() => {
+  const handleOpenDrawer = useCallback(() => {
     if (unlockingRef.current) {
       return;
     }
@@ -119,18 +116,14 @@ export function LockScreen(): React.JSX.Element {
 
     Animated.timing(exitProgress, {
       toValue: 1,
-      duration: 260,
+      duration: 220,
       useNativeDriver: true,
     }).start(() => {
-      NexusNative.exitLockScreen()
-        .then(handled => {
-          if (!handled) {
-            resetExit();
-          }
-        })
-        .catch(resetExit);
+      setDrawerVisible(true);
+      exitProgress.setValue(0);
+      unlockingRef.current = false;
     });
-  }, [exitProgress, resetExit]);
+  }, [exitProgress]);
 
   const handleFlashlight = useCallback(async () => {
     if (flashlightAvailable === false) {
@@ -186,6 +179,7 @@ export function LockScreen(): React.JSX.Element {
       style={[
         styles.root,
         {
+          backgroundColor: palette.background,
           opacity: exitProgress.interpolate({
             inputRange: [0, 1],
             outputRange: [1, 0],
@@ -264,7 +258,13 @@ export function LockScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.swipeSlot}>
-            <SwipeUpUnlock onUnlock={handleUnlock} compact={compact} />
+            <SwipeUpUnlock
+              onUnlock={handleOpenDrawer}
+              compact={compact}
+              label="Geser ke atas untuk pustaka aplikasi"
+              icon="gallery"
+              accessibilityLabel="Buka pustaka aplikasi"
+            />
           </View>
 
           <View style={[styles.shortcutSlot, styles.shortcutEnd]}>
@@ -278,6 +278,15 @@ export function LockScreen(): React.JSX.Element {
           </View>
         </View>
       </View>
+
+      <AppDrawer
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        onOpenTheme={() => {
+          setDrawerVisible(false);
+          setSheetVisible(true);
+        }}
+      />
 
       <WallpaperSheet
         visible={sheetVisible}

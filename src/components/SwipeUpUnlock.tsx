@@ -14,6 +14,9 @@ import { Icon } from './Icon';
 interface SwipeUpUnlockProps {
   onUnlock: () => void;
   compact?: boolean;
+  label?: string;
+  icon?: 'lock' | 'gallery';
+  accessibilityLabel?: string;
 }
 
 const SWIPE_DISTANCE = 150;
@@ -21,6 +24,9 @@ const SWIPE_DISTANCE = 150;
 export function SwipeUpUnlock({
   onUnlock,
   compact = false,
+  label = 'Geser ke atas untuk membuka',
+  icon = 'lock',
+  accessibilityLabel = 'Buka layar',
 }: SwipeUpUnlockProps): React.JSX.Element {
   const dragY = useRef(new Animated.Value(0)).current;
   const idle = useRef(new Animated.Value(0)).current;
@@ -143,9 +149,9 @@ export function SwipeUpUnlock({
       {...panResponder.panHandlers}
       accessible
       accessibilityRole="button"
-      accessibilityLabel="Buka layar"
-      accessibilityHint="Geser ke atas atau aktifkan untuk membuka"
-      accessibilityActions={[{ name: 'activate', label: 'Buka layar' }]}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="Geser ke atas atau aktifkan untuk melanjutkan"
+      accessibilityActions={[{ name: 'activate', label: accessibilityLabel }]}
       onAccessibilityAction={event => {
         if (event.nativeEvent.actionName === 'activate') {
           onUnlock();
@@ -160,10 +166,10 @@ export function SwipeUpUnlock({
         ]}
       >
         <Animated.View style={{ transform: [{ translateY: idleTranslate }] }}>
-          <Icon name="lock" size={15} color={colors.primary} />
+          <Icon name={icon} size={15} color={colors.primary} />
         </Animated.View>
         <Text style={[styles.text, compact && styles.textCompact]}>
-          Geser ke atas untuk membuka
+          {label}
         </Text>
         <Animated.View style={{ transform: [{ translateY: idleTranslate }] }}>
           <Icon name="swipeUp" size={18} color={colors.textSecondary} />

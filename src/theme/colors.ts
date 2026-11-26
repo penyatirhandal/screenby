@@ -32,4 +32,14 @@ export const colors = {
   scrimBottom: 'rgba(8, 9, 12, 0.82)',
   scrimSide: 'rgba(8, 9, 12, 0.48)',
   scrimClear: 'rgba(8, 9, 12, 0)',
-} as const;
+};
+
+export type LauncherPalette = typeof colors;
+
+/**
+ * Dynamic Color replaces the static palette in place. Components read `colors`
+ * at render time, so the surrounding provider only needs to trigger one re-render.
+ */
+export function applyLauncherPalette(palette: LauncherPalette): void {
+  Object.assign(colors, palette);
+}

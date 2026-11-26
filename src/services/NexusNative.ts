@@ -1,5 +1,11 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
-import type { BatteryState, ImportedWallpaper, NetworkState } from '../types';
+import type {
+  BatteryState,
+  ImportedWallpaper,
+  LauncherApp,
+  NetworkState,
+  WallpaperColors,
+} from '../types';
 
 interface NexusNativeInterface {
   getBatteryStatus(): Promise<BatteryState>;
@@ -11,6 +17,9 @@ interface NexusNativeInterface {
   saveWallpaper(uri: string): Promise<ImportedWallpaper>;
   clearWallpapers(): Promise<boolean>;
   fileExists(path: string): Promise<boolean>;
+  getInstalledApps(): Promise<LauncherApp[]>;
+  launchApp(packageName: string): Promise<boolean>;
+  getWallpaperColors(): Promise<WallpaperColors | null>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
@@ -83,6 +92,24 @@ export const NexusNative = {
     return nativeModule
       ? nativeModule.fileExists(path)
       : Promise.resolve(false);
+  },
+
+  getInstalledApps(): Promise<LauncherApp[]> {
+    return nativeModule
+      ? nativeModule.getInstalledApps()
+      : Promise.resolve([]);
+  },
+
+  launchApp(packageName: string): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.launchApp(packageName)
+      : Promise.resolve(false);
+  },
+
+  getWallpaperColors(): Promise<WallpaperColors | null> {
+    return nativeModule
+      ? nativeModule.getWallpaperColors()
+      : Promise.resolve(null);
   },
 };
 

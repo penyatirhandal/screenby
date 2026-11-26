@@ -1,14 +1,18 @@
 package com.nexuslock
 
 import android.annotation.SuppressLint
+import android.app.WallpaperManager
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.drawable.Drawable
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -17,8 +21,10 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Build
 import android.provider.MediaStore
 import android.telephony.TelephonyManager
+import android.util.Base64
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import com.facebook.react.bridge.Arguments
@@ -27,9 +33,11 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -531,6 +539,118 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     }
     return transformed
   }
+
+  // ---------------------------------------------------------------------------------------------
+  // Launcher: installed applications
+  // ---------------------------------------------------------------------------------------------
+
+  @ReactMethod
+  fun getInstalledApps(promise: Promise) {
+    try {
+      val manager = reactContext.packageManager
+      val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+      val result = Arguments.createArray()
+
+      manager.queryIntentActivities(launcherIntent, 0)
+          .distinctBy { it.activityInfo.applicationInfo.packageName }
+          .map { info: ResolveInfo ->
+            val packageName = info.activityInfo.applicationInfo.packageName
+            val label = info.loadLabel(manager).toString().ifBlank { packageName }
+            Triple(label, packageName, drawableToDataUri(info.loadIcon(manager)))
+          }
+          .sortedBy { it.first.lowercase(Locale.getDefault()) }
+          .forEach { (label, packageName, icon) ->
+            result.pushMap(
+                Arguments.createMap().apply {
+                  putString("label", label)
+                  putString("packageName", packageName)
+                  if (icon != null) {
+                    putString("icon", icon)
+                  } else {
+                    putNull("icon")
+                  }
+                }
+            )
+          }
+
+      promise.resolve(result)
+    } catch (e: Exception) {
+      promise.reject("E_APPS", e.message ?: "Gagal membaca daftar aplikasi.", e)
+    }
+  }
+
+  @ReactMethod
+  fun launchApp(packageName: String, promise: Promise) {
+    try {
+      val manager = reactContext.packageManager
+      val intent = manager.getLaunchIntentForPackage(packageName)
+      if (intent == null) {
+        promise.resolve(false)
+        return
+      }
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      reactContext.startActivity(intent)
+      promise.resolve(true)
+    } catch (e: ActivityNotFoundException) {
+      promise.reject("E_APP_NOT_FOUND", "Aplikasi tidak tersedia.", e)
+    } catch (e: Exception) {
+      promise.reject("E_LAUNCH", e.message ?: "Gagal membuka aplikasi.", e)
+    }
+  }
+
+  private fun drawableToDataUri(drawable: Drawable): String? {
+    return try {
+      val density = reactContext.resources.displayMetrics.density
+      val size = (48 * density).roundToInt().coerceAtLeast(48)
+      val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+      val canvas = Canvas(bitmap)
+      drawable.setBounds(0, 0, size, size)
+      drawable.draw(canvas)
+
+      val stream = ByteArrayOutputStream()
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+      bitmap.recycle()
+
+      val encoded = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+      "data:image/png;base64,$encoded"
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Launcher: Dynamic Color from the system wallpaper (Android 12+)
+  // ---------------------------------------------------------------------------------------------
+
+  @ReactMethod
+  fun getWallpaperColors(promise: Promise) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      promise.resolve(null)
+      return
+    }
+
+    try {
+      val manager = reactContext.getSystemService(WallpaperManager::class.java)
+      val colors = manager?.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+      if (colors == null) {
+        promise.resolve(null)
+        return
+      }
+
+      promise.resolve(
+          Arguments.createMap().apply {
+            putString("primary", toHex(colors.primaryColor))
+            colors.secondaryColor?.let { putString("secondary", toHex(it)) }
+            colors.tertiaryColor?.let { putString("tertiary", toHex(it)) }
+          }
+      )
+    } catch (_: Exception) {
+      promise.resolve(null)
+    }
+  }
+
+  private fun toHex(color: Int): String =
+      String.format(Locale.US, "#%06X", color and 0xFFFFFF)
 
   // ---------------------------------------------------------------------------------------------
   // Unlock / lifecycle helpers
