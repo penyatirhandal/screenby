@@ -16,16 +16,18 @@ sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Andro
 
 | Fitur | Catatan |
 |---|---|
-| Home bergaya Steam | Tab `NOW` / `FAVS` / `ANDROID`, kartu game besar, metadata manual, action bar Apps / Settings / Search / Play |
+| Home bergaya Steam | Tab `DESKTOP` (widget) dan `GAMES` (hero ikon persegi 1:1 + satu baris ikon horizontal), metadata manual, action bar Apps / Settings / Search / Play |
 | Landscape + reverse landscape | `android:screenOrientation="sensorLandscape"` |
 | Launcher default (HOME) | Dipilih lewat dialog Home Android |
+| Lock screen Nexus | Muncul setelah layar mati lalu menyala; geser ke atas masuk ke tab `DESKTOP`. Keyguard Android tetap berlaku |
 | Apps | Semua aplikasi + pencarian; tap untuk membuka |
-| Pin game | Tekan tahan aplikasi di Apps → **Pin game**; game muncul di Home |
+| Pin game | Tekan tahan aplikasi di Apps → **Pin ke Games**; game muncul di tab `GAMES` |
+| Widget Desktop | Jam, tanggal, baterai, dan jaringan dapat dipilih satu per satu di Settings |
 | Edit game | Tekan tahan game di Home → **Edit**: nama, ikon dari galeri, tahun rilis, genre, developer, publisher; **Save** / **Delete** |
 | Dismiss / Hapus | `Dismiss` melepas pin; `Hapus` di Apps membuka dialog uninstall Android |
 | Dynamic Color | Aksen diambil dari `WallpaperColors` Android 12+; fallback ke palet bawaan |
 | Font & ukuran font | Hack, Inter, Arial (Liberation Sans); preset Kecil–Sangat Besar, berlaku untuk seluruh teks launcher |
-| Wallpaper | Galeri + Smart Crop; bisa diterapkan sebagai wallpaper sistem agar warna berubah |
+| Wallpaper | Galeri + Smart Crop; dipakai sebagai latar Home/Lock screen dan bisa diterapkan ke wallpaper sistem agar Dynamic Color berubah |
 | Status OS asli | Jam, tanggal, baterai, jaringan Wi-Fi/seluler/ethernet/VPN |
 
 ---
@@ -33,10 +35,11 @@ sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Andro
 ## Cara pakai
 
 1. Pasang APK, tekan **Home**, pilih **Nexus Launcher** → **Always**.
-2. Di Home tekan **Apps**.
-3. Tekan tahan aplikasi → **Pin game** agar muncul di Home.
-4. Di Home tekan tahan game → **Play**, **Edit**, atau **Dismiss**.
-5. **Settings** → pilih font, ukuran font, wallpaper, lalu “Pakai sebagai wallpaper sistem”.
+2. Di Home, tab **DESKTOP** berisi widget; tab **GAMES** berisi game yang di-pin.
+3. Tekan **Apps**, lalu tekan tahan aplikasi → **Pin ke Games**.
+4. Di tab GAMES tekan tahan game → **Play**, **Edit**, atau **Dismiss**.
+5. Setelah layar mati lalu menyala, geser ke atas pada lock screen untuk masuk ke **DESKTOP**.
+6. **Settings** → pilih widget, font, ukuran font, wallpaper, lalu “Pakai sebagai wallpaper sistem”.
 
 Metadata game (tahun rilis, genre, developer, publisher) diisi manual lewat **Edit** karena
 Android tidak menyediakan data tersebut.

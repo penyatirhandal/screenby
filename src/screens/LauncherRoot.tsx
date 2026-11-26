@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, BackHandler, Platform } from 'react-native';
+import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { ActionMenu, type MenuOption } from '../components/ActionMenu';
 import { GameEditSheet, type GameEditPatch } from '../components/GameEditSheet';
 import { useGameLibrary } from '../hooks/useGameLibrary';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
 import { useWallpaper } from '../hooks/useWallpaper';
-import { NexusNative } from '../services/NexusNative';
+import {
+  NexusNative,
+  subscribeToScreenEvents,
+} from '../services/NexusNative';
 import type { LauncherThemeController } from '../hooks/useLauncherTheme';
-import type { LauncherApp, PinnedGame } from '../types';
+import type { HomeTab, LauncherApp, PinnedGame } from '../types';
 import { AppsScreen } from './AppsScreen';
 import { HomeScreen } from './HomeScreen';
+import { LockScreen } from './LockScreen';
 import { SettingsScreen } from './SettingsScreen';
 
-type Screen = 'home' | 'apps' | 'settings';
+type Screen = 'home' | 'apps' | 'settings' | 'lock';
 
 interface LauncherRootProps {
   theme: LauncherThemeController;
@@ -24,15 +28,49 @@ export function LauncherRoot({
   settings,
 }: LauncherRootProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('home');
+  const [homeTab, setHomeTab] = useState<HomeTab>('desktop');
   const [editing, setEditing] = useState<PinnedGame | null>(null);
   const [menuGame, setMenuGame] = useState<PinnedGame | null>(null);
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
 
+  const showLock = useCallback(() => {
+    setMenuGame(null);
+    setEditing(null);
+    setHomeTab('desktop');
+    setScreen('lock');
+  }, []);
+
+  useEffect(() => {
+    // The OS screen turning on/off drives the in-app Nexus lock screen.
+    const unsubscribeScreen = subscribeToScreenEvents(showLock, showLock);
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState !== 'active') {
+        return;
+      }
+      // Covers the case where JS was suspended while the keyguard was up.
+      NexusNative.consumeScreenLock()
+        .then(pending => {
+          if (pending) {
+            showLock();
+          }
+        })
+        .catch(() => undefined);
+    });
+
+    return () => {
+      unsubscribeScreen();
+      subscription.remove();
+    };
+  }, [showLock]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (screen === 'lock') {
+          return true;
+        }
         if (editing) {
           setEditing(null);
           return true;
@@ -46,6 +84,11 @@ export function LauncherRoot({
     );
     return () => subscription.remove();
   }, [editing, screen]);
+
+  const unlock = useCallback(() => {
+    setHomeTab('desktop');
+    setScreen('home');
+  }, []);
 
   const play = useCallback(
     async (game: PinnedGame) => {
@@ -66,7 +109,7 @@ export function LauncherRoot({
   const pin = useCallback(
     async (app: LauncherApp) => {
       await library.pin(app);
-      Alert.alert('Ditambahkan', `${app.label} sekarang ada di Home.`);
+      Alert.alert('Ditambahkan', `${app.label} sekarang ada di Games.`);
     },
     [library],
   );
@@ -127,11 +170,23 @@ export function LauncherRoot({
     <>
       <HomeScreen
         games={library.games}
+        tab={homeTab}
+        onTabChange={setHomeTab}
+        widgets={settings.settings.desktopWidgets}
+        wallpaper={wallpaper.wallpaper}
         onOpenApps={() => setScreen('apps')}
         onOpenSettings={() => setScreen('settings')}
         onPlay={game => play(game)}
         onLongPressGame={setMenuGame}
       />
+
+      {screen === 'lock' ? (
+        <LockScreen
+          wallpaper={wallpaper.wallpaper}
+          onUnlock={unlock}
+          onOpenSettings={() => setScreen('settings')}
+        />
+      ) : null}
 
       <AppsScreen
         visible={screen === 'apps'}
@@ -149,6 +204,8 @@ export function LauncherRoot({
         settings={settings.settings}
         onSetFont={settings.setFont}
         onSetFontSize={settings.setFontSize}
+        widgets={settings.settings.desktopWidgets}
+        onToggleWidget={settings.toggleWidget}
         wallpaper={wallpaper.wallpaper}
         onPickWallpaper={wallpaper.choose}
         onSaveCrop={async crop => {

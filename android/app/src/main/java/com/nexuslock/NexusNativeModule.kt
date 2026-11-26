@@ -59,11 +59,24 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   private var torchEnabled = false
   private var batteryReceiverRegistered = false
   private var networkCallbackRegistered = false
+  private var screenReceiverRegistered = false
 
   private val batteryReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       if (intent != null) {
         emit(EVENT_BATTERY, batteryMap(intent))
+      }
+    }
+  }
+
+  private val screenReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      when (intent?.action) {
+        Intent.ACTION_SCREEN_OFF -> {
+          markScreenLockPending()
+          emit(EVENT_SCREEN_OFF)
+        }
+        Intent.ACTION_SCREEN_ON -> emit(EVENT_SCREEN_ON)
       }
     }
   }
@@ -88,9 +101,19 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     super.initialize()
     registerBatteryUpdates()
     registerNetworkUpdates()
+    registerScreenUpdates()
   }
 
   override fun invalidate() {
+    if (screenReceiverRegistered) {
+      try {
+        reactContext.unregisterReceiver(screenReceiver)
+      } catch (_: Exception) {
+        // Receiver was already detached.
+      }
+      screenReceiverRegistered = false
+    }
+
     if (batteryReceiverRegistered) {
       try {
         reactContext.unregisterReceiver(batteryReceiver)
@@ -805,10 +828,57 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Screen on/off events
+  // ---------------------------------------------------------------------------------------------
+
+  private fun registerScreenUpdates() {
+    if (screenReceiverRegistered) {
+      return
+    }
+    try {
+      ContextCompat.registerReceiver(
+          reactContext,
+          screenReceiver,
+          IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+          },
+          ContextCompat.RECEIVER_NOT_EXPORTED
+      )
+      screenReceiverRegistered = true
+    } catch (_: Exception) {
+      screenReceiverRegistered = false
+    }
+  }
+
+  private fun screenPreferences() =
+      reactContext.getSharedPreferences(PREFS_SCREEN, Context.MODE_PRIVATE)
+
+  private fun markScreenLockPending() {
+    screenPreferences().edit().putBoolean(KEY_SCREEN_LOCK_PENDING, true).apply()
+  }
+
+  /** Lets JS show the Nexus lock screen after the OS screen turns back on. */
+  @ReactMethod
+  fun consumeScreenLock(promise: Promise) {
+    try {
+      val prefs = screenPreferences()
+      val pending =
+          prefs.getBoolean(KEY_SCREEN_LOCK_PENDING, false)
+      if (pending) {
+        prefs.edit().putBoolean(KEY_SCREEN_LOCK_PENDING, false).apply()
+      }
+      promise.resolve(pending)
+    } catch (e: Exception) {
+      promise.reject("E_SCREEN", e.message ?: "Gagal membaca status layar.", e)
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Event plumbing
   // ---------------------------------------------------------------------------------------------
 
-  private fun emit(eventName: String, payload: WritableMap) {
+  private fun emit(eventName: String, payload: WritableMap = Arguments.createMap()) {
     if (!reactContext.hasActiveReactInstance()) {
       return
     }
@@ -827,6 +897,10 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   companion object {
     private const val EVENT_BATTERY = "NexusBattery"
     private const val EVENT_NETWORK = "NexusNetwork"
+    private const val EVENT_SCREEN_OFF = "NexusScreenOff"
+    private const val EVENT_SCREEN_ON = "NexusScreenOn"
+    private const val PREFS_SCREEN = "nexus-screen-state"
+    private const val KEY_SCREEN_LOCK_PENDING = "lock_pending"
     private const val WALLPAPER_DIRECTORY = "wallpapers"
     private const val GAME_ICON_DIRECTORY = "game-icons"
     private const val GAME_ICON_SIZE = 512

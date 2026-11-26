@@ -24,6 +24,7 @@ interface NexusNativeInterface {
   deleteFile(path: string): Promise<boolean>;
   uninstallApp(packageName: string): Promise<boolean>;
   setSystemWallpaper(path: string): Promise<boolean>;
+  consumeScreenLock(): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
@@ -137,6 +138,12 @@ export const NexusNative = {
       ? nativeModule.setSystemWallpaper(path)
       : Promise.resolve(false);
   },
+
+  consumeScreenLock(): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.consumeScreenLock()
+      : Promise.resolve(false);
+  },
 };
 
 export function subscribeToBattery(
@@ -155,4 +162,18 @@ export function subscribeToNetwork(
     listener(args[0] as unknown as NetworkState);
   });
   return () => subscription?.remove();
+}
+
+/** Notifies JS when the Android screen turns off or on. */
+export function subscribeToScreenEvents(
+  onScreenOff: () => void,
+  onScreenOn: () => void,
+): () => void {
+  const emitterInstance = getEmitter();
+  const off = emitterInstance?.addListener('NexusScreenOff', onScreenOff);
+  const on = emitterInstance?.addListener('NexusScreenOn', onScreenOn);
+  return () => {
+    off?.remove();
+    on?.remove();
+  };
 }

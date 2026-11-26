@@ -86,10 +86,12 @@ export interface PinnedGame {
 
 export type FontChoice = 'hack' | 'inter' | 'arial';
 export type FontSizeChoice = 'small' | 'normal' | 'large' | 'xlarge';
+export type DesktopWidget = 'clock' | 'date' | 'battery' | 'network';
 
 export interface LauncherSettings {
   font: FontChoice;
   fontSize: FontSizeChoice;
+  desktopWidgets: DesktopWidget[];
 }
 
-export type HomeTab = 'now' | 'favs' | 'android';
+export type HomeTab = 'desktop' | 'games';

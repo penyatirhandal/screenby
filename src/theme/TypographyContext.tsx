@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { applyTypography, fonts, typography } from './typography';
+import { DEFAULT_SETTINGS } from '../services/LauncherSettingsService';
 import type { LauncherSettings } from '../types';
 
 interface TypographyContextValue {
@@ -11,7 +12,7 @@ interface TypographyContextValue {
 const defaultValue: TypographyContextValue = {
   fonts,
   scaled: (size: number) => typography.scaled(size),
-  settings: { font: 'inter', fontSize: 'normal' },
+  settings: { ...DEFAULT_SETTINGS },
 };
 
 const TypographyContext =

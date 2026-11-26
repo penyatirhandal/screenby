@@ -111,7 +111,7 @@ export function AppsScreen({
               onPress: () => onUnpin(menuApp.packageName),
             }
           : {
-              label: 'Pin game',
+              label: 'Pin ke Games',
               icon: 'pin',
               onPress: () => onPin(menuApp),
             },
@@ -303,7 +303,7 @@ export function AppsScreen({
             },
           ]}
         >
-          Tekan tahan aplikasi untuk Pin game atau Hapus.
+          Tekan tahan aplikasi untuk Pin ke Games atau Hapus.
         </Text>
       </View>
 

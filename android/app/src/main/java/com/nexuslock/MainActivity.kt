@@ -1,7 +1,6 @@
 package com.nexuslock
 
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -20,9 +19,6 @@ class MainActivity : ReactActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-
-    // A lock screen should stay awake while it is in the foreground.
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     hideSystemBars()
   }
 

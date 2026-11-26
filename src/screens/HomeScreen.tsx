@@ -16,17 +16,30 @@ import {
   Icon,
   type IconName,
 } from '../components/Icon';
+import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
 import { useBattery } from '../hooks/useBattery';
-import { useClock } from '../hooks/useClock';
+import { useClock, type ClockInfo } from '../hooks/useClock';
 import { useNetwork } from '../hooks/useNetwork';
 import { wallpaperUri } from '../services/WallpaperService';
 import { withAlpha } from '../theme/colorUtils';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { useTypography } from '../theme/TypographyContext';
-import type { HomeTab, NetworkState, PinnedGame } from '../types';
+import type {
+  BatteryState,
+  DesktopWidget,
+  HomeTab,
+  NetworkState,
+  PinnedGame,
+  Wallpaper,
+} from '../types';
+import { computeCoverLayout } from '../utils/smartCrop';
 
 interface HomeScreenProps {
   games: PinnedGame[];
+  tab: HomeTab;
+  onTabChange: (tab: HomeTab) => void;
+  widgets: DesktopWidget[];
+  wallpaper: Wallpaper | null;
   onOpenApps: () => void;
   onOpenSettings: () => void;
   onPlay: (game: PinnedGame) => void;
@@ -34,10 +47,13 @@ interface HomeScreenProps {
 }
 
 const TABS: { key: HomeTab; label: string }[] = [
-  { key: 'now', label: 'NOW' },
-  { key: 'favs', label: 'FAVS' },
-  { key: 'android', label: 'ANDROID' },
+  { key: 'desktop', label: 'DESKTOP' },
+  { key: 'games', label: 'GAMES' },
 ];
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 function artworkSource(game: PinnedGame) {
   if (game.customIconPath) {
@@ -71,8 +87,27 @@ function presentNetwork(network: NetworkState | null): {
   return { icon: 'signal', label: 'Ethernet' };
 }
 
+function displayName(game: PinnedGame): string {
+  return game.customLabel || game.label || game.packageName;
+}
+
+function metadataLine(game: PinnedGame): string {
+  return [
+    game.releaseYear ? `Rilis ${game.releaseYear}` : null,
+    game.genre,
+    game.developer ? `Dev ${game.developer}` : null,
+    game.publisher ? `Pub ${game.publisher}` : null,
+  ]
+    .filter(Boolean)
+    .join('  ·  ');
+}
+
 export function HomeScreen({
   games,
+  tab,
+  onTabChange,
+  widgets,
+  wallpaper,
   onOpenApps,
   onOpenSettings,
   onPlay,
@@ -86,23 +121,30 @@ export function HomeScreen({
   const battery = useBattery();
   const network = useNetwork();
 
-  const [tab, setTab] = useState<HomeTab>('favs');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [wallpaperFailed, setWallpaperFailed] = useState(false);
 
-  const visibleGames = useMemo(() => {
-    if (tab === 'now') {
-      const played = games
-        .filter(game => game.lastPlayedAt)
-        .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0));
-      return played.length > 0 ? played : games;
+  const visibleGames = useMemo(
+    () => [...games].sort((a, b) => b.pinnedAt - a.pinnedAt),
+    [games],
+  );
+
+  const wallpaperLayout = useMemo(() => {
+    if (!wallpaper) {
+      return null;
     }
-    if (tab === 'android') {
-      return [...games].sort((a, b) =>
-        displayName(a).localeCompare(displayName(b)),
-      );
-    }
-    return [...games].sort((a, b) => b.pinnedAt - a.pinnedAt);
-  }, [games, tab]);
+    return computeCoverLayout(
+      wallpaper.width,
+      wallpaper.height,
+      width,
+      height,
+      wallpaper.crop,
+    );
+  }, [wallpaper, width, height]);
+
+  useEffect(() => {
+    setWallpaperFailed(false);
+  }, [wallpaper?.path]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -116,20 +158,29 @@ export function HomeScreen({
 
   const selected = visibleGames[selectedIndex] ?? null;
   const compact = height < 400;
-  const heroWidth = Math.max(220, Math.min(width * 0.56, 720));
-  const railWidth = Math.max(96, Math.min(width * 0.16, 180));
-  const heroHeight = compact ? Math.max(140, height * 0.44) : height * 0.5;
+  const heroSize = clamp(Math.min(height * 0.52, width * 0.3), 150, 560);
+  const iconSize = clamp(height * 0.1, 58, 96);
   const connection = presentNetwork(network);
   const batteryLevel = battery?.level ?? -1;
 
   return (
-    <View
-      style={[
-        StyleSheet.absoluteFill,
-        { backgroundColor: palette.background },
-      ]}
-    >
-      <WaveBackdrop width={width} height={height} />
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]}>
+      <WallpaperBackdrop
+        wallpaper={wallpaper}
+        layout={wallpaperLayout}
+        failed={wallpaperFailed}
+        onError={() => setWallpaperFailed(true)}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          withAlpha(palette.background, 0.74),
+          withAlpha(palette.background, 0.22),
+          withAlpha(palette.background, 0.88),
+        ]}
+        locations={[0, 0.42, 1]}
+        style={StyleSheet.absoluteFill}
+      />
 
       <View
         style={[
@@ -154,7 +205,7 @@ export function HomeScreen({
                 return (
                   <Pressable
                     key={item.key}
-                    onPress={() => setTab(item.key)}
+                    onPress={() => onTabChange(item.key)}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={`Tab ${item.label}`}
@@ -163,7 +214,7 @@ export function HomeScreen({
                       {
                         backgroundColor: active
                           ? withAlpha(palette.primary, 0.22)
-                          : withAlpha('#FFFFFF', 0.04),
+                          : withAlpha('#FFFFFF', 0.06),
                         borderColor: active
                           ? palette.primary
                           : palette.glassBorder,
@@ -219,8 +270,16 @@ export function HomeScreen({
           </View>
         </View>
 
-        {selected ? (
-          <View style={styles.showcase}>
+        {tab === 'desktop' ? (
+          <DesktopDashboard
+            widgets={widgets}
+            clock={clock}
+            battery={battery}
+            network={network}
+            onOpenSettings={onOpenSettings}
+          />
+        ) : selected ? (
+          <View style={styles.gamesArea}>
             <Pressable
               onPress={() => onPlay(selected)}
               onLongPress={() => onLongPressGame(selected)}
@@ -229,10 +288,10 @@ export function HomeScreen({
               style={({ pressed }) => [
                 styles.hero,
                 {
-                  width: heroWidth,
-                  height: heroHeight,
-                  borderColor: palette.textPrimary,
-                  backgroundColor: palette.surface,
+                  width: heroSize,
+                  height: heroSize,
+                  borderColor: palette.primary,
+                  backgroundColor: withAlpha(palette.surface, 0.75),
                 },
                 pressed && styles.pressed,
               ]}
@@ -242,10 +301,10 @@ export function HomeScreen({
                 pointerEvents="none"
                 colors={[
                   withAlpha(palette.background, 0),
-                  withAlpha(palette.background, 0.45),
-                  withAlpha(palette.background, 0.92),
+                  withAlpha(palette.background, 0.4),
+                  withAlpha(palette.background, 0.94),
                 ]}
-                locations={[0.35, 0.68, 1]}
+                locations={[0.32, 0.66, 1]}
                 style={styles.heroFade}
               />
               <View style={styles.heroCaption}>
@@ -279,10 +338,11 @@ export function HomeScreen({
             </Pressable>
 
             <FlatList
+              horizontal
               data={visibleGames}
               keyExtractor={item => item.packageName}
-              showsVerticalScrollIndicator={false}
-              style={[styles.rail, { width: railWidth }]}
+              showsHorizontalScrollIndicator={false}
+              style={styles.rail}
               contentContainerStyle={styles.railContent}
               renderItem={({ item, index }) => {
                 const active = index === selectedIndex;
@@ -295,24 +355,33 @@ export function HomeScreen({
                     style={({ pressed }) => [
                       styles.railCard,
                       {
+                        width: iconSize,
+                        height: iconSize,
                         borderColor: active
                           ? palette.primary
                           : palette.glassBorder,
-                        backgroundColor: palette.surface,
+                        backgroundColor: withAlpha(palette.surface, 0.82),
                       },
                       pressed && styles.pressed,
                     ]}
                   >
                     <Artwork game={item} />
+                    <LinearGradient
+                      pointerEvents="none"
+                      colors={[
+                        withAlpha(palette.background, 0),
+                        withAlpha(palette.background, 0.92),
+                      ]}
+                      locations={[0.35, 1]}
+                      style={styles.railFade}
+                    />
                     <Text
                       style={[
                         styles.railLabel,
                         {
-                          color: active
-                            ? palette.textPrimary
-                            : palette.textMuted,
+                          color: palette.textPrimary,
                           fontFamily: fonts.body,
-                          fontSize: scaled(10),
+                          fontSize: scaled(9),
                         },
                       ]}
                       numberOfLines={1}
@@ -349,7 +418,7 @@ export function HomeScreen({
                 },
               ]}
             >
-              Buka Apps, tekan tahan aplikasi, lalu pilih Pin game.
+              Buka Apps, tekan tahan aplikasi, lalu pilih Pin ke Games.
             </Text>
             <Pressable
               onPress={onOpenApps}
@@ -408,19 +477,221 @@ export function HomeScreen({
   );
 }
 
-function displayName(game: PinnedGame): string {
-  return game.customLabel || game.label || game.packageName;
+function DesktopDashboard({
+  widgets,
+  clock,
+  battery,
+  network,
+  onOpenSettings,
+}: {
+  widgets: DesktopWidget[];
+  clock: ClockInfo;
+  battery: BatteryState | null;
+  network: NetworkState | null;
+  onOpenSettings: () => void;
+}): React.JSX.Element {
+  const palette = useLauncherPalette();
+  const { fonts, scaled } = useTypography();
+  const { width, height } = useWindowDimensions();
+  const connection = presentNetwork(network);
+  const level = battery?.level ?? -1;
+  const hasWidgets = widgets.length > 0;
+  const clockSize = clamp(height * 0.2, 52, 124);
+
+  if (!hasWidgets) {
+    return (
+      <View style={styles.empty}>
+        <Icon name="grid" size={scaled(46)} color={palette.primary} />
+        <Text
+          style={[
+            styles.emptyTitle,
+            {
+              color: palette.textPrimary,
+              fontFamily: fonts.displayBold,
+              fontSize: scaled(20),
+            },
+          ]}
+        >
+          Belum ada widget
+        </Text>
+        <Text
+          style={[
+            styles.emptyHint,
+            {
+              color: palette.textMuted,
+              fontFamily: fonts.body,
+              fontSize: scaled(12),
+            },
+          ]}
+        >
+          Pilih widget di Settings untuk menampilkan jam, tanggal, baterai, dan
+          jaringan di halaman Desktop.
+        </Text>
+        <Pressable
+          onPress={onOpenSettings}
+          accessibilityRole="button"
+          accessibilityLabel="Buka Settings"
+          style={({ pressed }) => [
+            styles.emptyButton,
+            { backgroundColor: palette.primary },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.emptyButtonText,
+              {
+                color: palette.background,
+                fontFamily: fonts.bodyBold,
+                fontSize: scaled(13),
+              },
+            ]}
+          >
+            BUKA SETTINGS
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.desktopArea}>
+      <View style={styles.desktopRow}>
+        {widgets.includes('clock') ? (
+          <View
+            style={[
+              styles.widgetCard,
+              styles.clockCard,
+              {
+                backgroundColor: withAlpha(palette.background, 0.52),
+                borderColor: palette.glassBorder,
+              },
+            ]}
+          >
+            <Text
+              allowFontScaling={false}
+              numberOfLines={1}
+              style={[
+                styles.desktopClock,
+                {
+                  color: palette.textPrimary,
+                  fontFamily: fonts.displayBold,
+                  fontSize: scaled(clockSize),
+                  lineHeight: scaled(clockSize) * 1.02,
+                },
+              ]}
+              accessibilityLabel={`Pukul ${clock.time}`}
+            >
+              {clock.time}
+            </Text>
+            <Text
+              style={[
+                styles.desktopZone,
+                {
+                  color: palette.primary,
+                  fontFamily: fonts.body,
+                  fontSize: scaled(13),
+                },
+              ]}
+            >
+              {clock.timezone}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.sideColumn}>
+          {widgets.includes('date') ? (
+            <DesktopInfoCard
+              icon="calendar"
+              label={clock.date}
+              detail="Tanggal"
+            />
+          ) : null}
+          {widgets.includes('battery') ? (
+            <DesktopInfoCard
+              icon={batteryIcon(level, battery?.charging ?? false)}
+              label={level >= 0 ? `${level}%` : '--%'}
+              detail={battery?.charging ? 'Mengisi daya' : 'Baterai'}
+            />
+          ) : null}
+          {widgets.includes('network') ? (
+            <DesktopInfoCard
+              icon={connection.icon}
+              label={connection.label}
+              detail="Jaringan"
+            />
+          ) : null}
+        </View>
+      </View>
+      <Text
+        style={[
+          styles.desktopHint,
+          {
+            color: palette.textMuted,
+            fontFamily: fonts.body,
+            fontSize: scaled(11),
+            maxWidth: width * 0.8,
+          },
+        ]}
+      >
+        Widget dapat diatur di Settings.
+      </Text>
+    </View>
+  );
 }
 
-function metadataLine(game: PinnedGame): string {
-  return [
-    game.releaseYear ? `Rilis ${game.releaseYear}` : null,
-    game.genre,
-    game.developer ? `Dev ${game.developer}` : null,
-    game.publisher ? `Pub ${game.publisher}` : null,
-  ]
-    .filter(Boolean)
-    .join('  ·  ');
+function DesktopInfoCard({
+  icon,
+  label,
+  detail,
+}: {
+  icon: IconName;
+  label: string;
+  detail: string;
+}): React.JSX.Element {
+  const palette = useLauncherPalette();
+  const { fonts, scaled } = useTypography();
+  return (
+    <View
+      style={[
+        styles.widgetCard,
+        styles.infoCard,
+        {
+          backgroundColor: withAlpha(palette.background, 0.52),
+          borderColor: palette.glassBorder,
+        },
+      ]}
+    >
+      <Icon name={icon} size={scaled(20)} color={palette.primary} />
+      <View style={styles.infoText}>
+        <Text
+          style={[
+            styles.infoLabel,
+            {
+              color: palette.textPrimary,
+              fontFamily: fonts.bodyBold,
+              fontSize: scaled(15),
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text
+          style={[
+            styles.infoDetail,
+            {
+              color: palette.textMuted,
+              fontFamily: fonts.body,
+              fontSize: scaled(10),
+            },
+          ]}
+        >
+          {detail}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 function ControllerKey({ label }: { label: string }): React.JSX.Element {
@@ -528,7 +799,7 @@ function Artwork({
     <Image
       source={source}
       style={styles.artwork}
-      resizeMode={large ? 'cover' : 'contain'}
+      resizeMode="contain"
       accessibilityLabel={`Ikon ${displayName(game)}`}
     />
   );
@@ -557,7 +828,7 @@ function ActionButton({
         {
           backgroundColor: primary
             ? palette.primary
-            : withAlpha('#FFFFFF', 0.05),
+            : withAlpha('#FFFFFF', 0.06),
           borderColor: primary ? palette.primary : palette.glassBorder,
         },
         pressed && styles.pressed,
@@ -581,64 +852,6 @@ function ActionButton({
         {label}
       </Text>
     </Pressable>
-  );
-}
-
-function WaveBackdrop({
-  width,
-  height,
-}: {
-  width: number;
-  height: number;
-}): React.JSX.Element {
-  const palette = useLauncherPalette();
-  return (
-    <View pointerEvents="none" style={styles.waveRoot}>
-      <View
-        style={[
-          styles.waveBase,
-          {
-            backgroundColor: withAlpha('#12392D', 0.9),
-            width: width * 1.5,
-            height: height * 0.82,
-            borderRadius: width,
-            transform: [
-              { translateX: -width * 0.18 },
-              { translateY: height * 0.34 },
-              { rotate: '-8deg' },
-            ],
-          },
-        ]}
-      />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          withAlpha(palette.primary, 0),
-          withAlpha(palette.primary, 0.3),
-          withAlpha('#1F6B4F', 0.55),
-        ]}
-        locations={[0, 0.55, 1]}
-        style={[
-          styles.waveAccent,
-          {
-            width: width * 1.3,
-            height: height * 0.6,
-            borderRadius: width,
-            transform: [
-              { translateX: -width * 0.1 },
-              { translateY: height * 0.52 },
-              { rotate: '6deg' },
-            ],
-          },
-        ]}
-      />
-      <LinearGradient
-        pointerEvents="none"
-        colors={[withAlpha(palette.background, 0), palette.background]}
-        locations={[0, 1]}
-        style={styles.waveScrim}
-      />
-    </View>
   );
 }
 
@@ -675,9 +888,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   tab: {
-    minWidth: 72,
+    minWidth: 96,
     height: 30,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
@@ -710,14 +923,13 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
-  showcase: {
+  gamesArea: {
     flex: 1,
+    minHeight: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 18,
-    minHeight: 0,
-    paddingVertical: 8,
+    gap: 16,
   },
   hero: {
     borderRadius: 14,
@@ -729,9 +941,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   heroCaption: {
-    paddingHorizontal: 18,
-    paddingBottom: 14,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 2,
   },
   heroTitle: {
     letterSpacing: -0.5,
@@ -739,37 +951,85 @@ const styles = StyleSheet.create({
   metadata: {
     lineHeight: 16,
   },
-  artwork: {
-    ...StyleSheet.absoluteFill,
-    width: undefined,
-    height: undefined,
-  },
-  artworkFallback: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackLetter: {
-    textAlign: 'center',
-  },
   rail: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   railContent: {
     gap: 10,
     paddingVertical: 2,
   },
   railCard: {
-    height: 92,
     borderRadius: 10,
     borderWidth: 1,
-    padding: 6,
-    alignItems: 'center',
-    justifyContent: 'space-between',
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  railFade: {
+    ...StyleSheet.absoluteFill,
   },
   railLabel: {
     textAlign: 'center',
+    maxWidth: '100%',
+    paddingHorizontal: 2,
+    paddingBottom: 4,
+  },
+  desktopArea: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    gap: 12,
+  },
+  desktopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  widgetCard: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    justifyContent: 'center',
+  },
+  clockCard: {
+    flexGrow: 1,
+    flexShrink: 1,
+    maxWidth: 620,
+    minHeight: 150,
+  },
+  sideColumn: {
+    width: 280,
+    flexShrink: 0,
+    gap: 10,
+  },
+  desktopClock: {
+    textAlign: 'left',
+    fontVariant: ['tabular-nums'],
+  },
+  desktopZone: {
+    marginTop: 4,
+  },
+  infoCard: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  infoText: {
+    flexShrink: 1,
+  },
+  infoLabel: {
+    letterSpacing: 0.3,
+  },
+  infoDetail: {
+    marginTop: 2,
+  },
+  desktopHint: {
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   empty: {
     flex: 1,
@@ -782,7 +1042,7 @@ const styles = StyleSheet.create({
   },
   emptyHint: {
     textAlign: 'center',
-    maxWidth: 360,
+    maxWidth: 420,
   },
   emptyButton: {
     marginTop: 10,
@@ -813,20 +1073,20 @@ const styles = StyleSheet.create({
   actionLabel: {
     letterSpacing: 0.5,
   },
+  artwork: {
+    ...StyleSheet.absoluteFill,
+    width: undefined,
+    height: undefined,
+  },
+  artworkFallback: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackLetter: {
+    textAlign: 'center',
+  },
   pressed: {
     opacity: 0.68,
-  },
-  waveRoot: {
-    ...StyleSheet.absoluteFill,
-    overflow: 'hidden',
-  },
-  waveBase: {
-    position: 'absolute',
-  },
-  waveAccent: {
-    position: 'absolute',
-  },
-  waveScrim: {
-    ...StyleSheet.absoluteFill,
   },
 });
