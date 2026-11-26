@@ -39,12 +39,14 @@ import type {
   BatteryState,
   BuiltinWidget,
   DesktopWidgetItem,
+  GameIconSize,
   HomeTab,
   NetworkState,
   PinnedGame,
   Wallpaper,
   WidgetProvider,
 } from '../types';
+import {chunkGames, GAME_GAP, gameGridFor} from '../utils/gameLayout';
 import {computeCoverLayout} from '../utils/smartCrop';
 
 interface HomeScreenProps {
@@ -52,6 +54,7 @@ interface HomeScreenProps {
   tab: HomeTab;
   onTabChange: (tab: HomeTab) => void;
   desktopItems: DesktopWidgetItem[];
+  gameIconSize: GameIconSize;
   wallpaper: Wallpaper | null;
   onOpenApps: () => void;
   onOpenSettings: () => void;
@@ -77,7 +80,6 @@ const TABS: {key: HomeTab; label: string}[] = [
   {key: 'games', label: 'GAMES'},
 ];
 
-const GAME_GAP = 12;
 const DEFAULT_BUILTIN_SIZE = {width: 0.26, height: 0.34};
 const DEFAULT_APP_WIDGET_SIZE = {width: 0.34, height: 0.44};
 
@@ -135,6 +137,7 @@ export function HomeScreen({
   tab,
   onTabChange,
   desktopItems,
+  gameIconSize,
   wallpaper,
   onOpenApps,
   onOpenSettings,
@@ -182,13 +185,18 @@ export function HomeScreen({
   const compact = height < 400;
   const connection = presentNetwork(network);
   const batteryLevel = battery?.level ?? -1;
-  const gameCardSize = clamp(
-    Math.min(gameAreaSize.height * 0.74, (gameAreaSize.width || width) / 3.4),
-    108,
-    260,
+  const {cardSize: gameCardSize, rows: gameRows} = gameGridFor(
+    gameIconSize,
+    gameAreaSize.width || width,
+    gameAreaSize.height,
   );
+  const gameColumns = useMemo(
+    () => chunkGames(visibleGames, gameRows),
+    [visibleGames, gameRows],
+  );
+  const gameColumnStep = gameCardSize + GAME_GAP;
   const gameSidePadding =
-    visibleGames.length <= 1
+    gameColumns.length <= 1
       ? Math.max(12, ((gameAreaSize.width || width) - gameCardSize) / 2)
       : 12;
 
@@ -312,66 +320,73 @@ export function HomeScreen({
           >
             <FlatList
               horizontal
-              data={visibleGames}
-              keyExtractor={item => item.packageName}
+              data={gameColumns}
+              keyExtractor={(_item, index) => `column-${index}`}
               showsHorizontalScrollIndicator={false}
               style={styles.gameRow}
               contentContainerStyle={[
                 styles.gameRowContent,
                 {paddingHorizontal: gameSidePadding},
               ]}
-              snapToInterval={gameCardSize + GAME_GAP}
+              snapToInterval={gameColumnStep}
               snapToAlignment="start"
               decelerationRate="fast"
               getItemLayout={(_data, index) => ({
-                length: gameCardSize + GAME_GAP,
-                offset: (gameCardSize + GAME_GAP) * index,
+                length: gameColumnStep,
+                offset: gameColumnStep * index,
                 index,
               })}
-              renderItem={({item}) => (
-                <Pressable
-                  onPress={() => onPlay(item)}
-                  onLongPress={() => onLongPressGame(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Mainkan ${displayName(item)}`}
-                  style={({pressed}) => [
-                    styles.gameCard,
-                    {
-                      width: gameCardSize,
-                      height: gameCardSize,
-                      borderColor: palette.glassBorder,
-                      backgroundColor: withAlpha(palette.surface, 0.82),
-                    },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Artwork
-                    game={item}
-                    letterSize={scaled(gameCardSize * 0.34)}
-                  />
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={[
-                      withAlpha(palette.background, 0),
-                      withAlpha(palette.background, 0.94),
-                    ]}
-                    locations={[0.42, 1]}
-                    style={styles.gameCardFade}
-                  />
-                  <Text
-                    style={[
-                      styles.gameCardLabel,
-                      {
-                        color: palette.textPrimary,
-                        fontFamily: fonts.bodyBold,
-                        fontSize: scaled(clamp(gameCardSize * 0.085, 11, 18)),
-                      },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {displayName(item)}
-                  </Text>
-                </Pressable>
+              renderItem={({item: column}) => (
+                <View style={styles.gameColumn}>
+                  {column.map(item => (
+                    <Pressable
+                      key={item.packageName}
+                      onPress={() => onPlay(item)}
+                      onLongPress={() => onLongPressGame(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Mainkan ${displayName(item)}`}
+                      style={({pressed}) => [
+                        styles.gameCard,
+                        {
+                          width: gameCardSize,
+                          height: gameCardSize,
+                          borderColor: palette.glassBorder,
+                          backgroundColor: withAlpha(palette.surface, 0.82),
+                        },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Artwork
+                        game={item}
+                        letterSize={scaled(gameCardSize * 0.34)}
+                      />
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={[
+                          withAlpha(palette.background, 0),
+                          withAlpha(palette.background, 0.94),
+                        ]}
+                        locations={[0.42, 1]}
+                        style={styles.gameCardFade}
+                      />
+                      <Text
+                        style={[
+                          styles.gameCardLabel,
+                          {
+                            color: palette.textPrimary,
+                            fontFamily: fonts.bodyBold,
+                            fontSize: scaled(
+                              clamp(gameCardSize * 0.085, 11, 18),
+                            ),
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {displayName(item)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               )}
             />
           </View>
@@ -1461,6 +1476,10 @@ const styles = StyleSheet.create({
     gap: GAME_GAP,
     alignItems: 'center',
     paddingVertical: 2,
+  },
+  gameColumn: {
+    gap: GAME_GAP,
+    alignItems: 'center',
   },
   gameCard: {
     borderRadius: 18,

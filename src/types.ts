@@ -87,6 +87,9 @@ export interface PinnedGame {
 export type FontChoice = 'hack' | 'inter' | 'arial';
 export type FontSizeChoice = 'small' | 'normal' | 'large' | 'xlarge';
 
+/** Icon sizing on the GAMES tab. */
+export type GameIconSize = 'small' | 'normal' | 'large';
+
 /** Built-in widgets rendered by React Native. */
 export type BuiltinWidget = 'clock' | 'date' | 'music' | 'battery' | 'network';
 
@@ -141,6 +144,7 @@ export interface AddedWidget {
 export interface LauncherSettings {
   font: FontChoice;
   fontSize: FontSizeChoice;
+  gameIconSize: GameIconSize;
   /** Kept for migration from older settings. */
   desktopWidgets: BuiltinWidget[];
   desktopItems: DesktopWidgetItem[];

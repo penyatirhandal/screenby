@@ -187,6 +187,7 @@ export function LauncherRoot({
         tab={homeTab}
         onTabChange={setHomeTab}
         desktopItems={settings.settings.desktopItems}
+        gameIconSize={settings.settings.gameIconSize}
         wallpaper={wallpaper.wallpaper}
         onOpenApps={() => setScreen('apps')}
         onOpenSettings={() => setScreen('settings')}
@@ -222,6 +223,7 @@ export function LauncherRoot({
         settings={settings.settings}
         onSetFont={settings.setFont}
         onSetFontSize={settings.setFontSize}
+        onSetGameIconSize={settings.setGameIconSize}
         wallpaper={wallpaper.wallpaper}
         onPickWallpaper={wallpaper.choose}
         onSaveCrop={async crop => {

@@ -77,6 +77,25 @@ test('fresh installs use the music widget instead of battery', () => {
   expect(widgets).toEqual(['clock', 'date', 'music', 'network']);
 });
 
+test('game icon size defaults to large and survives save/load', async () => {
+  const defaults = await loadSettings();
+  expect(defaults.gameIconSize).toBe('large');
+
+  await saveSettings({...defaults, gameIconSize: 'small'});
+  expect((await loadSettings()).gameIconSize).toBe('small');
+
+  await saveSettings({...defaults, gameIconSize: 'normal'});
+  expect((await loadSettings()).gameIconSize).toBe('normal');
+});
+
+test('invalid game icon size falls back to large', async () => {
+  await AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({gameIconSize: 'huge', desktopItems: []}),
+  );
+  expect((await loadSettings()).gameIconSize).toBe('large');
+});
+
 test('migrates a legacy default battery widget to music', async () => {
   await AsyncStorage.setItem(
     STORAGE_KEY,

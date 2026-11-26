@@ -14,6 +14,7 @@ import type {
   DesktopWidgetLayout,
   FontChoice,
   FontSizeChoice,
+  GameIconSize,
   LauncherSettings,
 } from '../types';
 
@@ -21,6 +22,7 @@ export interface LauncherSettingsController {
   settings: LauncherSettings;
   setFont: (font: FontChoice) => Promise<void>;
   setFontSize: (fontSize: FontSizeChoice) => Promise<void>;
+  setGameIconSize: (size: GameIconSize) => Promise<void>;
   setDesktopItems: (items: DesktopWidgetItem[]) => Promise<void>;
   addBuiltinWidget: (
     widget: BuiltinWidget,
@@ -133,6 +135,7 @@ export function useLauncherSettings(): LauncherSettingsController {
     settings,
     setFont: (font: FontChoice) => update({font}),
     setFontSize: (fontSize: FontSizeChoice) => update({fontSize}),
+    setGameIconSize: (gameIconSize: GameIconSize) => update({gameIconSize}),
     setDesktopItems,
     addBuiltinWidget,
     addAppWidget,

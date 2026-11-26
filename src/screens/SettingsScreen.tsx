@@ -21,9 +21,19 @@ import type {
   CropState,
   FontChoice,
   FontSizeChoice,
+  GameIconSize,
   LauncherSettings,
   Wallpaper,
 } from '../types';
+
+const GAME_ICON_SIZE_OPTIONS: Record<
+  GameIconSize,
+  {label: string; detail: string}
+> = {
+  small: {label: 'Kecil', detail: '2 baris kartu game'},
+  normal: {label: 'Normal', detail: '1 baris · 50% dari ukuran Besar'},
+  large: {label: 'Besar', detail: '1 baris · ukuran saat ini'},
+};
 
 interface SettingsScreenProps {
   visible: boolean;
@@ -31,6 +41,7 @@ interface SettingsScreenProps {
   settings: LauncherSettings;
   onSetFont: (font: FontChoice) => Promise<void>;
   onSetFontSize: (size: FontSizeChoice) => Promise<void>;
+  onSetGameIconSize: (size: GameIconSize) => Promise<void>;
   wallpaper: Wallpaper | null;
   onPickWallpaper: () => Promise<Wallpaper | null>;
   onSaveCrop: (crop: CropState) => Promise<void>;
@@ -44,6 +55,7 @@ export function SettingsScreen({
   settings,
   onSetFont,
   onSetFontSize,
+  onSetGameIconSize,
   wallpaper,
   onPickWallpaper,
   onSaveCrop,
@@ -238,6 +250,18 @@ export function SettingsScreen({
           ))}
         </Section>
 
+        <Section title="UKURAN IKON GAMES" icon="grid">
+          {(Object.keys(GAME_ICON_SIZE_OPTIONS) as GameIconSize[]).map(size => (
+            <OptionRow
+              key={size}
+              label={GAME_ICON_SIZE_OPTIONS[size].label}
+              detail={GAME_ICON_SIZE_OPTIONS[size].detail}
+              selected={settings.gameIconSize === size}
+              onPress={() => onSetGameIconSize(size)}
+            />
+          ))}
+        </Section>
+
         <Section title="WIDGET DESKTOP" icon="grid">
           <Text
             style={[
@@ -340,10 +364,12 @@ function Section({
 
 function OptionRow({
   label,
+  detail,
   selected,
   onPress,
 }: {
   label: string;
+  detail?: string;
   selected: boolean;
   onPress: () => void;
 }): React.JSX.Element {
@@ -357,18 +383,34 @@ function OptionRow({
       accessibilityLabel={label}
       style={({ pressed }) => [styles.option, pressed && styles.pressed]}
     >
-      <Text
-        style={[
-          styles.optionText,
-          {
-            color: selected ? palette.primary : palette.textSecondary,
-            fontFamily: fonts.body,
-            fontSize: scaled(14),
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      <View style={styles.optionLabelGroup}>
+        <Text
+          style={[
+            styles.optionText,
+            {
+              color: selected ? palette.primary : palette.textSecondary,
+              fontFamily: fonts.body,
+              fontSize: scaled(14),
+            },
+          ]}
+        >
+          {label}
+        </Text>
+        {detail ? (
+          <Text
+            style={[
+              styles.optionDetail,
+              {
+                color: palette.textMuted,
+                fontFamily: fonts.body,
+                fontSize: scaled(10),
+              },
+            ]}
+          >
+            {detail}
+          </Text>
+        ) : null}
+      </View>
       {selected ? (
         <Icon name="check" size={scaled(18)} color={palette.primary} />
       ) : null}
@@ -449,7 +491,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
   },
+  optionLabelGroup: {
+    flexShrink: 1,
+    gap: 2,
+  },
   optionText: {
+    flexShrink: 1,
+  },
+  optionDetail: {
     flexShrink: 1,
   },
   previewTitle: {

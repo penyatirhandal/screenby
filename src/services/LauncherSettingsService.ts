@@ -6,6 +6,7 @@ import type {
   DesktopWidgetLayout,
   FontChoice,
   FontSizeChoice,
+  GameIconSize,
   LauncherSettings,
   WidgetProvider,
 } from '../types';
@@ -30,6 +31,7 @@ const DEFAULT_DESKTOP_WIDGETS: BuiltinWidget[] = [
 
 const FONTS: FontChoice[] = ['hack', 'inter', 'arial'];
 const SIZES: FontSizeChoice[] = ['small', 'normal', 'large', 'xlarge'];
+const GAME_ICON_SIZES: GameIconSize[] = ['small', 'normal', 'large'];
 
 const DEFAULT_LAYOUT: Record<BuiltinWidget, DesktopWidgetLayout> = {
   clock: {x: 0.05, y: 0.1, width: 0.33, height: 0.68},
@@ -240,6 +242,12 @@ function sanitizeLegacyWidgets(value: unknown): BuiltinWidget[] {
   return migrateLegacyWidgets(DESKTOP_WIDGETS.filter(widget => seen.has(widget)));
 }
 
+function sanitizeGameIconSize(value: unknown): GameIconSize {
+  return GAME_ICON_SIZES.includes(value as GameIconSize)
+    ? (value as GameIconSize)
+    : DEFAULT_SETTINGS.gameIconSize;
+}
+
 function legacyWidgetsFromItems(items: DesktopWidgetItem[]): BuiltinWidget[] {
   const present = new Set(
     items
@@ -256,6 +264,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
       return {
         font: DEFAULT_SETTINGS.font,
         fontSize: DEFAULT_SETTINGS.fontSize,
+        gameIconSize: DEFAULT_SETTINGS.gameIconSize,
         desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
         desktopItems: defaultDesktopItems(),
       };
@@ -281,6 +290,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
       fontSize: SIZES.includes(candidate.fontSize as FontSizeChoice)
         ? (candidate.fontSize as FontSizeChoice)
         : DEFAULT_SETTINGS.fontSize,
+      gameIconSize: sanitizeGameIconSize(candidate.gameIconSize),
       desktopWidgets: hasItems
         ? legacyWidgetsFromItems(desktopItems)
         : sanitizeLegacyWidgets(candidate.desktopWidgets),
@@ -290,6 +300,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
     return {
       font: DEFAULT_SETTINGS.font,
       fontSize: DEFAULT_SETTINGS.fontSize,
+      gameIconSize: DEFAULT_SETTINGS.gameIconSize,
       desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
       desktopItems: defaultDesktopItems(),
     };
@@ -302,6 +313,7 @@ export async function saveSettings(
   const stored: LauncherSettings = {
     font: settings.font,
     fontSize: settings.fontSize,
+    gameIconSize: settings.gameIconSize,
     desktopWidgets: legacyWidgetsFromItems(settings.desktopItems),
     desktopItems: settings.desktopItems,
   };
@@ -311,6 +323,7 @@ export async function saveSettings(
 export const DEFAULT_SETTINGS: LauncherSettings = {
   font: 'inter',
   fontSize: 'normal',
+  gameIconSize: 'large',
   desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
   desktopItems: defaultDesktopItems(),
 };
