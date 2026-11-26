@@ -25,6 +25,10 @@
         <intent>
             <action android:name="android.intent.action.DELETE" />
         </intent>
+        <!-- Package visibility for widget providers on Android 11+. -->
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent>
     </queries>
 
     <application

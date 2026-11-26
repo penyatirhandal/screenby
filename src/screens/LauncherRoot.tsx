@@ -172,12 +172,16 @@ export function LauncherRoot({
         games={library.games}
         tab={homeTab}
         onTabChange={setHomeTab}
-        widgets={settings.settings.desktopWidgets}
+        desktopItems={settings.settings.desktopItems}
         wallpaper={wallpaper.wallpaper}
         onOpenApps={() => setScreen('apps')}
         onOpenSettings={() => setScreen('settings')}
         onPlay={game => play(game)}
         onLongPressGame={setMenuGame}
+        onAddBuiltinWidget={settings.addBuiltinWidget}
+        onAddAppWidget={settings.addAppWidget}
+        onUpdateWidget={settings.updateWidget}
+        onRemoveWidget={settings.removeWidget}
       />
 
       {screen === 'lock' ? (
@@ -204,8 +208,6 @@ export function LauncherRoot({
         settings={settings.settings}
         onSetFont={settings.setFont}
         onSetFontSize={settings.setFontSize}
-        widgets={settings.settings.desktopWidgets}
-        onToggleWidget={settings.toggleWidget}
         wallpaper={wallpaper.wallpaper}
         onPickWallpaper={wallpaper.choose}
         onSaveCrop={async crop => {

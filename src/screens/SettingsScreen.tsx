@@ -17,22 +17,13 @@ import {
 import { useTypography } from '../theme/TypographyContext';
 import { NexusNative } from '../services/NexusNative';
 import { wallpaperUri } from '../services/WallpaperService';
-import { DESKTOP_WIDGETS } from '../services/LauncherSettingsService';
 import type {
   CropState,
-  DesktopWidget,
   FontChoice,
   FontSizeChoice,
   LauncherSettings,
   Wallpaper,
 } from '../types';
-
-const WIDGET_LABELS: Record<DesktopWidget, string> = {
-  clock: 'Jam',
-  date: 'Tanggal',
-  battery: 'Baterai',
-  network: 'Jaringan',
-};
 
 interface SettingsScreenProps {
   visible: boolean;
@@ -40,8 +31,6 @@ interface SettingsScreenProps {
   settings: LauncherSettings;
   onSetFont: (font: FontChoice) => Promise<void>;
   onSetFontSize: (size: FontSizeChoice) => Promise<void>;
-  widgets: DesktopWidget[];
-  onToggleWidget: (widget: DesktopWidget) => Promise<void>;
   wallpaper: Wallpaper | null;
   onPickWallpaper: () => Promise<Wallpaper | null>;
   onSaveCrop: (crop: CropState) => Promise<void>;
@@ -55,8 +44,6 @@ export function SettingsScreen({
   settings,
   onSetFont,
   onSetFontSize,
-  widgets,
-  onToggleWidget,
   wallpaper,
   onPickWallpaper,
   onSaveCrop,
@@ -262,16 +249,10 @@ export function SettingsScreen({
               },
             ]}
           >
-            Pilih widget yang ditampilkan di tab Desktop.
+            Widget dikelola langsung dari tab DESKTOP di Home. Tekan lama area
+            kosong untuk menambah widget, lalu tekan lama widget untuk
+            memindahkan, mengubah ukuran, atau menghapusnya.
           </Text>
-          {DESKTOP_WIDGETS.map(widget => (
-            <ToggleRow
-              key={widget}
-              label={WIDGET_LABELS[widget]}
-              selected={widgets.includes(widget)}
-              onPress={() => onToggleWidget(widget)}
-            />
-          ))}
         </Section>
 
         <Section title="PREVIEW" icon="autoAwesome">
@@ -370,44 +351,6 @@ function OptionRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.option, pressed && styles.pressed]}
-    >
-      <Text
-        style={[
-          styles.optionText,
-          {
-            color: selected ? palette.primary : palette.textSecondary,
-            fontFamily: fonts.body,
-            fontSize: scaled(14),
-          },
-        ]}
-      >
-        {label}
-      </Text>
-      {selected ? (
-        <Icon name="check" size={scaled(18)} color={palette.primary} />
-      ) : null}
-    </Pressable>
-  );
-}
-
-function ToggleRow({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}): React.JSX.Element {
-  const palette = useLauncherPalette();
-  const { fonts, scaled } = useTypography();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
       accessibilityLabel={label}
       style={({ pressed }) => [styles.option, pressed && styles.pressed]}

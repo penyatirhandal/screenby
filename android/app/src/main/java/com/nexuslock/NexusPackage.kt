@@ -6,10 +6,15 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 class NexusPackage : ReactPackage {
-  override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-      listOf(NexusNativeModule(reactContext))
+  override fun createNativeModules(
+      reactContext: ReactApplicationContext,
+  ): List<NativeModule> =
+      listOf(
+          NexusNativeModule(reactContext),
+          NexusWidgetModule(reactContext),
+      )
 
   override fun createViewManagers(
-      reactContext: ReactApplicationContext
-  ): List<ViewManager<*, *>> = emptyList()
+      reactContext: ReactApplicationContext,
+  ): List<ViewManager<*, *>> = listOf(AppWidgetViewManager())
 }

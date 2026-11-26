@@ -1,5 +1,6 @@
 package com.nexuslock
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -27,6 +28,11 @@ class MainActivity : ReactActivity() {
     if (hasFocus) {
       hideSystemBars()
     }
+  }
+
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    NexusWidgetModule.handleActivityResult(requestCode, resultCode, data)
   }
 
   /**

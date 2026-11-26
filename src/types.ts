@@ -86,12 +86,53 @@ export interface PinnedGame {
 
 export type FontChoice = 'hack' | 'inter' | 'arial';
 export type FontSizeChoice = 'small' | 'normal' | 'large' | 'xlarge';
-export type DesktopWidget = 'clock' | 'date' | 'battery' | 'network';
+
+/** Built-in widgets rendered by React Native. */
+export type BuiltinWidget = 'clock' | 'date' | 'battery' | 'network';
+
+/** Layout is stored as 0..1 fractions so it survives rotation. */
+export interface DesktopWidgetLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface BuiltinDesktopWidget extends DesktopWidgetLayout {
+  id: string;
+  kind: 'builtin';
+  widget: BuiltinWidget;
+}
+
+export interface AppDesktopWidget extends DesktopWidgetLayout {
+  id: string;
+  kind: 'appwidget';
+  /** ID allocated by Android's AppWidgetHost. */
+  appWidgetId: number;
+  /** Flattened ComponentName of the widget provider. */
+  provider: string;
+  label: string;
+}
+
+export type DesktopWidgetItem = BuiltinDesktopWidget | AppDesktopWidget;
+
+export interface WidgetProvider {
+  provider: string;
+  label: string;
+}
+
+export interface AddedWidget {
+  appWidgetId: number;
+  provider: string;
+  label: string;
+}
 
 export interface LauncherSettings {
   font: FontChoice;
   fontSize: FontSizeChoice;
-  desktopWidgets: DesktopWidget[];
+  /** Kept for migration from older settings. */
+  desktopWidgets: BuiltinWidget[];
+  desktopItems: DesktopWidgetItem[];
 }
 
 export type HomeTab = 'desktop' | 'games';

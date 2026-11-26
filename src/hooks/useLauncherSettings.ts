@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   DEFAULT_SETTINGS,
-  DESKTOP_WIDGETS,
   loadSettings,
+  makeAppWidgetItem,
+  makeBuiltinItem,
   saveSettings,
 } from '../services/LauncherSettingsService';
+import {NexusWidgets} from '../services/NexusWidgets';
 import type {
-  DesktopWidget,
+  AddedWidget,
+  BuiltinWidget,
+  DesktopWidgetItem,
+  DesktopWidgetLayout,
   FontChoice,
   FontSizeChoice,
   LauncherSettings,
@@ -16,13 +21,26 @@ export interface LauncherSettingsController {
   settings: LauncherSettings;
   setFont: (font: FontChoice) => Promise<void>;
   setFontSize: (fontSize: FontSizeChoice) => Promise<void>;
-  toggleWidget: (widget: DesktopWidget) => Promise<void>;
+  setDesktopItems: (items: DesktopWidgetItem[]) => Promise<void>;
+  addBuiltinWidget: (
+    widget: BuiltinWidget,
+    layout: Partial<DesktopWidgetLayout>,
+  ) => Promise<void>;
+  addAppWidget: (
+    added: AddedWidget,
+    layout: Partial<DesktopWidgetLayout>,
+  ) => Promise<void>;
+  updateWidget: (
+    id: string,
+    patch: Partial<DesktopWidgetLayout>,
+  ) => Promise<void>;
+  removeWidget: (id: string) => Promise<void>;
 }
 
 export function useLauncherSettings(): LauncherSettingsController {
   const [settings, setSettings] = useState<LauncherSettings>({
     ...DEFAULT_SETTINGS,
-    desktopWidgets: [...DESKTOP_WIDGETS],
+    desktopItems: [...DEFAULT_SETTINGS.desktopItems],
   });
   const settingsRef = useRef(settings);
 
@@ -48,7 +66,7 @@ export function useLauncherSettings(): LauncherSettingsController {
   }, []);
 
   const update = useCallback(async (patch: Partial<LauncherSettings>) => {
-    const next = { ...settingsRef.current, ...patch };
+    const next = {...settingsRef.current, ...patch};
     settingsRef.current = next;
     setSettings(next);
     try {
@@ -58,23 +76,67 @@ export function useLauncherSettings(): LauncherSettingsController {
     }
   }, []);
 
-  const toggleWidget = useCallback(
-    async (widget: DesktopWidget) => {
-      const current = settingsRef.current.desktopWidgets;
-      const next = current.includes(widget)
-        ? current.filter(item => item !== widget)
-        : DESKTOP_WIDGETS.filter(
-            item => item === widget || current.includes(item),
-          );
-      await update({ desktopWidgets: next });
-    },
+  const setDesktopItems = useCallback(
+    async (items: DesktopWidgetItem[]) => update({desktopItems: items}),
     [update],
+  );
+
+  const addBuiltinWidget = useCallback(
+    async (widget: BuiltinWidget, layout: Partial<DesktopWidgetLayout>) => {
+      const suffix = `${Date.now()}-${Math.round(Math.random() * 1000)}`;
+      const next = [
+        ...settingsRef.current.desktopItems,
+        makeBuiltinItem(widget, layout, suffix),
+      ];
+      await setDesktopItems(next);
+    },
+    [setDesktopItems],
+  );
+
+  const addAppWidget = useCallback(
+    async (added: AddedWidget, layout: Partial<DesktopWidgetLayout>) => {
+      const item = makeAppWidgetItem(added, layout);
+      if (!item) {
+        return;
+      }
+      await setDesktopItems([...settingsRef.current.desktopItems, item]);
+    },
+    [setDesktopItems],
+  );
+
+  const updateWidget = useCallback(
+    async (id: string, patch: Partial<DesktopWidgetLayout>) => {
+      const next = settingsRef.current.desktopItems.map(item =>
+        item.id === id ? ({...item, ...patch} as DesktopWidgetItem) : item,
+      );
+      await setDesktopItems(next);
+    },
+    [setDesktopItems],
+  );
+
+  const removeWidget = useCallback(
+    async (id: string) => {
+      const target = settingsRef.current.desktopItems.find(
+        item => item.id === id,
+      );
+      if (target?.kind === 'appwidget') {
+        await NexusWidgets.deleteWidget(target.appWidgetId).catch(() => false);
+      }
+      await setDesktopItems(
+        settingsRef.current.desktopItems.filter(item => item.id !== id),
+      );
+    },
+    [setDesktopItems],
   );
 
   return {
     settings,
-    setFont: (font: FontChoice) => update({ font }),
-    setFontSize: (fontSize: FontSizeChoice) => update({ fontSize }),
-    toggleWidget,
+    setFont: (font: FontChoice) => update({font}),
+    setFontSize: (fontSize: FontSizeChoice) => update({fontSize}),
+    setDesktopItems,
+    addBuiltinWidget,
+    addAppWidget,
+    updateWidget,
+    removeWidget,
   };
 }
