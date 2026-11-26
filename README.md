@@ -117,6 +117,11 @@ android/app/build/outputs/apk/debug/app-debug.apk
 Workflow `.github/workflows/android-build.yml` berjalan pada push/PR dan dapat dipicu
 manual (`workflow_dispatch`). Setiap run menghasilkan artifact **nexus-lock-screen-debug**.
 
+Untuk setiap push ke `main`/`master`, APK debug juga dipublikasikan ke
+[GitHub Release `latest-debug`](https://github.com/penyatirhandal/screenby/releases/tag/latest-debug)
+dengan nama aset `NexusLockScreen-debug.apk`, sehingga bisa diunduh tanpa login GitHub.
+Aset akan ditimpa otomatis pada push berikutnya.
+
 ### Release bertanda tangan (opsional)
 
 Tambahkan repository secrets berikut:

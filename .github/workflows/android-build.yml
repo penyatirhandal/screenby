@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-${{ github.ref }}
@@ -68,6 +68,11 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Prepare debug release asset
+        run: |
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/NexusLockScreen-debug.apk
+
       - name: Decode release keystore
         if: ${{ env.NEXUS_KEYSTORE_BASE64 != '' && env.NEXUS_KEYSTORE_PASSWORD != '' && env.NEXUS_KEY_ALIAS != '' && env.NEXUS_KEY_PASSWORD != '' }}
         run: |
@@ -87,3 +92,25 @@ jobs:
           name: nexus-lock-screen-release
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+      - name: Prepare signed release asset
+        if: ${{ env.NEXUS_KEYSTORE_BASE64 != '' && env.NEXUS_KEYSTORE_PASSWORD != '' && env.NEXUS_KEY_ALIAS != '' && env.NEXUS_KEY_PASSWORD != '' }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk release-assets/NexusLockScreen-release.apk
+
+      - name: Publish APK to GitHub Release
+        if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest-debug
+          name: Nexus Lock Screen - Latest Debug
+          body: |
+            APK debug otomatis dari commit `${{ github.sha }}`.
+
+            - Build: GitHub Actions run `${{ github.run_id }}`
+            - Debug: `NexusLockScreen-debug.apk`
+            - Release signed tersedia jika keempat secrets keystore sudah diisi.
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          overwrite_files: true
+          files: release-assets/*.apk
