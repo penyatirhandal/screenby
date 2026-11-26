@@ -1,25 +1,23 @@
-/**
- * Nexus Lock Screen
- * Material You inspired landscape lock screen.
- *
- * @format
- */
-
 import React from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useLauncherSettings } from './src/hooks/useLauncherSettings';
 import { useLauncherTheme } from './src/hooks/useLauncherTheme';
-import { LockScreen } from './src/screens/LockScreen';
+import { LauncherRoot } from './src/screens/LauncherRoot';
 import { ThemeProvider } from './src/theme/ThemeContext';
+import { TypographyProvider } from './src/theme/TypographyContext';
 
 function App(): React.JSX.Element {
-  const palette = useLauncherTheme();
+  const theme = useLauncherTheme();
+  const settings = useLauncherSettings();
 
   return (
     <SafeAreaProvider>
       <StatusBar hidden barStyle="light-content" />
-      <ThemeProvider palette={palette}>
-        <LockScreen />
+      <ThemeProvider palette={theme.palette}>
+        <TypographyProvider settings={settings.settings}>
+          <LauncherRoot theme={theme} settings={settings} />
+        </TypographyProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

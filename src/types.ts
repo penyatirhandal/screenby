@@ -65,3 +65,31 @@ export interface WallpaperColors {
   secondary?: string | null;
   tertiary?: string | null;
 }
+
+/** A game pinned to the home screen. Metadata is always user supplied. */
+export interface PinnedGame {
+  packageName: string;
+  /** Label from Android, used as the default and as a fallback. */
+  label: string;
+  /** Native app icon data URI, refreshed from the OS on each load. */
+  icon?: string | null;
+  /** Overrides from the Edit form. */
+  customLabel?: string;
+  customIconPath?: string;
+  releaseYear?: string;
+  genre?: string;
+  developer?: string;
+  publisher?: string;
+  pinnedAt: number;
+  lastPlayedAt?: number;
+}
+
+export type FontChoice = 'hack' | 'inter' | 'arial';
+export type FontSizeChoice = 'small' | 'normal' | 'large' | 'xlarge';
+
+export interface LauncherSettings {
+  font: FontChoice;
+  fontSize: FontSizeChoice;
+}
+
+export type HomeTab = 'now' | 'favs' | 'android';

@@ -1,37 +1,45 @@
-# Nexus Lock Screen
+# Nexus Launcher
 
-Launcher Android alternatif dengan orientasi **landscape**, tema gelap Material You,
-wallpaper pilihan sendiri (Smart Crop), jam real-time, status baterai/jaringan, serta
-gesture swipe-up untuk membuka pustaka aplikasi bergaya Steam.
+Launcher Android alternatif bergaya **Steam Big Picture** dengan orientasi **landscape**,
+Dynamic Color dari wallpaper sistem, game yang di-pin di Home, dan halaman **Apps** berisi
+semua aplikasi yang terpasang.
 
 Dibangun dengan **React Native 0.88 + TypeScript** untuk UI dan **Kotlin** untuk integrasi
 sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Android Studio.
 
-> Catatan: file HTML desain acuan yang disebut pada PRD tidak tersedia di repositori ini.
-> UI diimplementasikan mengikuti palette, tipografi, dan struktur layout PRD §3.
+> Aplikasi ini **bukan pengganti Android Keyguard**. PIN/pola/biometrik tetap dikelola
+> Android dan tidak pernah dilewati.
 
 ---
 
-## Fitur MVP
+## Fitur
 
-| Fitur | Status | Catatan |
-|---|---|---|
-| Orientasi landscape | ✅ | `sensorLandscape` + immersive fullscreen |
-| Wallpaper dari galeri | ✅ | System photo picker, tanpa izin storage |
-| Smart Crop + focal point | ✅ | Cover-fit tanpa distorsi, geser & zoom, tersimpan |
-| Jam digital 24 jam | ✅ | Update tepat per menit + refresh saat resume |
-| Tanggal Bahasa Indonesia | ✅ | Format manual, tidak bergantung locale perangkat |
-| Widget baterai | ✅ | Level, status charging, sumber daya, progress bar |
-| Swipe-up ke app drawer | ✅ | Threshold jarak/kecepatan + animasi mengikuti jari |
-| Launcher default (HOME) | ✅ | Dipilih lewat dialog Home Android; mendukung landscape terbalik |
-| App drawer bergaya Steam | ✅ | Semua aplikasi + pencarian, kartu 16:9, ikon asli |
-| Dynamic Color wallpaper | ✅ | Android 12+; fallback ke palette PRD bila tidak tersedia |
-| Senter | ✅ | Camera2 torch, menangani perangkat tanpa flash |
-| Shortcut kamera | ✅ | Intent kamera sistem, menangani kamera tidak tersedia |
-| Info jaringan | ✅ | Wi-Fi / seluler / ethernet / VPN, generasi seluler bila diizinkan OS |
+| Fitur | Catatan |
+|---|---|
+| Home bergaya Steam | Tab `NOW` / `FAVS` / `ANDROID`, kartu game besar, metadata manual, action bar Apps / Settings / Search / Play |
+| Landscape + reverse landscape | `android:screenOrientation="sensorLandscape"` |
+| Launcher default (HOME) | Dipilih lewat dialog Home Android |
+| Apps | Semua aplikasi + pencarian; tap untuk membuka |
+| Pin game | Tekan tahan aplikasi di Apps → **Pin game**; game muncul di Home |
+| Edit game | Tekan tahan game di Home → **Edit**: nama, ikon dari galeri, tahun rilis, genre, developer, publisher; **Save** / **Delete** |
+| Dismiss / Hapus | `Dismiss` melepas pin; `Hapus` di Apps membuka dialog uninstall Android |
+| Dynamic Color | Aksen diambil dari `WallpaperColors` Android 12+; fallback ke palet bawaan |
+| Font & ukuran font | Hack, Inter, Arial (Liberation Sans); preset Kecil–Sangat Besar, berlaku untuk seluruh teks launcher |
+| Wallpaper | Galeri + Smart Crop; bisa diterapkan sebagai wallpaper sistem agar warna berubah |
+| Status OS asli | Jam, tanggal, baterai, jaringan Wi-Fi/seluler/ethernet/VPN |
 
-Fitur future sesuai PRD (cuaca real-time, wallpaper animasi, widget musik, notifikasi)
-belum termasuk MVP.
+---
+
+## Cara pakai
+
+1. Pasang APK, tekan **Home**, pilih **Nexus Launcher** → **Always**.
+2. Di Home tekan **Apps**.
+3. Tekan tahan aplikasi → **Pin game** agar muncul di Home.
+4. Di Home tekan tahan game → **Play**, **Edit**, atau **Dismiss**.
+5. **Settings** → pilih font, ukuran font, wallpaper, lalu “Pakai sebagai wallpaper sistem”.
+
+Metadata game (tahun rilis, genre, developer, publisher) diisi manual lewat **Edit** karena
+Android tidak menyediakan data tersebut.
 
 ---
 
@@ -41,38 +49,16 @@ belum termasuk MVP.
 .
 ├── App.tsx
 ├── src/
-│   ├── components/
-│   │   ├── BatteryCard.tsx
-│   │   ├── ClockWidget.tsx
-│   │   ├── Icon.tsx
-│   │   ├── ShortcutButton.tsx
-│   │   ├── StatusBar.tsx
-│   │   ├── SwipeUpUnlock.tsx
-│   │   ├── WallpaperBackdrop.tsx
-│   │   ├── WallpaperSheet.tsx
-│   │   └── WeatherWidget.tsx      # chip tanggal (cuaca = future feature)
-│   ├── hooks/
-│   │   ├── useBattery.ts
-│   │   ├── useClock.ts
-│   │   ├── useFlashlight.ts
-│   │   ├── useNetwork.ts
-│   │   └── useWallpaper.ts
-│   ├── screens/LockScreen.tsx
-│   ├── services/
-│   │   ├── NexusNative.ts         # bridge typed ke Kotlin
-│   │   └── WallpaperService.ts    # picker + AsyncStorage + import
-│   ├── theme/
-│   │   ├── colors.ts
-│   │   └── typography.ts
+│   ├── components/      # ActionMenu, GameEditSheet, Icon, WallpaperSheet, ...
+│   ├── hooks/           # useGameLibrary, useLauncherSettings, useLauncherTheme, ...
+│   ├── screens/         # HomeScreen, AppsScreen, SettingsScreen, LauncherRoot
+│   ├── services/        # NexusNative, GameLibraryService, LauncherSettingsService, ...
+│   ├── theme/           # colors, dynamicColor, typography, providers
 │   ├── utils/smartCrop.ts
 │   └── types.ts
 ├── android/app/src/main/
-│   ├── java/com/nexuslock/
-│   │   ├── MainActivity.kt
-│   │   ├── MainApplication.kt
-│   │   ├── NexusNativeModule.kt
-│   │   └── NexusPackage.kt
-│   ├── assets/fonts/              # Plus Jakarta Sans, Rubik, Material Symbols
+│   ├── java/com/nexuslock/NexusNativeModule.kt
+│   ├── assets/fonts/    # Hack, Inter, Liberation Sans, Material Symbols, ...
 │   └── AndroidManifest.xml
 ├── __tests__/
 └── .github/workflows/android-build.yml
@@ -80,113 +66,52 @@ belum termasuk MVP.
 
 ---
 
-## Menjalankan Secara Lokal
+## Build & verifikasi
 
-Prasyarat:
-
-- Node.js **≥ 22.11**
-- JDK **17**
-- Android SDK (platform 36, build-tools 36.0.0) + `ANDROID_HOME` yang valid
-- Perangkat/emulator Android
+Prasyarat: Node.js **≥ 22.11**, JDK **17**, Android SDK platform 36 + build-tools 36.0.0.
 
 ```bash
 npm install
-npm run android          # build + install debug ke perangkat
+npm run typecheck
+npm run lint
+npm test -- --runInBand
+npm run build:debug      # android/app/build/outputs/apk/debug/app-debug.apk
+npm run build:release    # android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Perintah lain:
+Build release lokal memakai debug keystore sebagai fallback; jangan dipakai untuk
+distribusi produksi.
 
-```bash
-npm run typecheck        # tsc --noEmit
-npm run lint             # ESLint
-npm test                 # Jest (smart crop + render smoke test)
-npm run build:debug      # android/gradlew assembleDebug
-npm run build:release    # android/gradlew assembleRelease
-```
+### GitHub Actions & Release
 
-APK debug dihasilkan di:
+Setiap push/PR menjalankan workflow `.github/workflows/android-build.yml` dan menghasilkan
+artifact **nexus-lock-screen-debug**. Setiap push ke `main`/`master` juga memperbarui
+[GitHub Release `latest-debug`](https://github.com/penyatirhandal/screenby/releases/tag/latest-debug):
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+https://github.com/penyatirhandal/screenby/releases/download/latest-debug/NexusLockScreen-debug.apk
 ```
 
-> Environment pengembangan saat ini tidak memiliki JDK/Android SDK. Verifikasi build
-> APK dilakukan melalui GitHub Actions.
+Untuk release bertanda tangan, tambahkan secrets `NEXUS_KEYSTORE_BASE64`,
+`NEXUS_KEYSTORE_PASSWORD`, `NEXUS_KEY_ALIAS`, dan `NEXUS_KEY_PASSWORD`.
 
 ---
 
-## Build APK via GitHub Actions
+## Catatan teknis
 
-Workflow `.github/workflows/android-build.yml` berjalan pada push/PR dan dapat dipicu
-manual (`workflow_dispatch`). Setiap run menghasilkan artifact **nexus-lock-screen-debug**.
-
-Untuk setiap push ke `main`/`master`, APK debug juga dipublikasikan ke
-[GitHub Release `latest-debug`](https://github.com/penyatirhandal/screenby/releases/tag/latest-debug)
-dengan nama aset `NexusLockScreen-debug.apk`, sehingga bisa diunduh tanpa login GitHub.
-Aset akan ditimpa otomatis pada push berikutnya.
-
-### Menjadikan launcher default
-
-Setelah APK terpasang, tekan tombol **Home**, pilih **Nexus Lock Screen**, lalu pilih
-**Always**. Orientasi mengikuti sensor: landscape dan landscape terbalik keduanya didukung.
-
-### Release bertanda tangan (opsional)
-
-Tambahkan repository secrets berikut:
-
-| Secret | Isi |
-|---|---|
-| `NEXUS_KEYSTORE_BASE64` | isi keystore PKCS12 yang di-encode base64 |
-| `NEXUS_KEYSTORE_PASSWORD` | password keystore |
-| `NEXUS_KEY_ALIAS` | alias key |
-| `NEXUS_KEY_PASSWORD` | password key |
-
-Membuat keystore dan nilai base64:
-
-```bash
-keytool -genkeypair -v -storetype PKCS12 \
-  -keystore nexus-release.keystore \
-  -alias nexus -keyalg RSA -keysize 2048 -validity 10000
-
-base64 -w0 nexus-release.keystore > nexus-release.keystore.b64
-```
-
-Jika keempat secret tersedia, workflow juga membangun dan mengunggah artifact
-**nexus-lock-screen-release**. Tanpa secret lengkap, release build lokal memakai debug keystore
-sebagai fallback — jangan dipakai untuk distribusi produksi.
-
----
-
-## Catatan Teknis & Batasan
-
-- Aplikasi ini **bukan pengganti Android Keyguard**. PIN/pola/password/biometrik tetap
-  dikelola Android dan tidak pernah dilewati.
-- Swipe-up memanggil `finishAffinity()`; aplikasi keluar dari layar alternatif tanpa
-  memalsukan autentikasi sistem.
-- Menampilkan aplikasi otomatis saat layar mati/nyala memerlukan integrasi Android
-  tambahan di luar cakupan MVP (lihat PRD §6).
-- **Estimasi waktu pengisian tidak ditampilkan** karena Android tidak menyediakan nilai
-  tersebut secara andal untuk aplikasi biasa. Data yang tidak tersedia tidak dibuat-buat.
-- Wi-Fi SSID tidak dibaca karena membutuhkan izin lokasi; status bar menampilkan jenis
-  transport aktif.
-- Generasi seluler (2G/3G/4G/5G) hanya tampil bila OS mengizinkan `READ_BASIC_PHONE_STATE`;
-  jika tidak, label "Seluler" digunakan.
-- Wallpaper disalin ke penyimpanan privat aplikasi, dirotasi sesuai EXIF, dan diperkecil
-  maksimal 2560 px agar hemat memori.
-- Baterai dan jaringan memakai event native (`BroadcastReceiver` /
-  `ConnectivityManager`), bukan polling.
-- Izin yang diminta hanya `INTERNET`, `ACCESS_NETWORK_STATE`, dan
-  `READ_BASIC_PHONE_STATE` (normal). Picker galeri memakai system photo picker sehingga
-  tidak meminta akses storage.
-- Cuaca real-time belum diimplementasikan (future feature); chip hanya menampilkan tanggal.
-
----
+- Widget/status memakai data OS asli (`BatteryManager`, `ConnectivityManager`,
+  `TelephonyManager`, `WallpaperColors`). Estimasi waktu isi daya tidak ditampilkan.
+- Wi-Fi SSID tidak dibaca karena memerlukan izin lokasi.
+- Generasi seluler hanya tampil bila OS mengizinkan `READ_BASIC_PHONE_STATE`.
+- Izin: `INTERNET`, `ACCESS_NETWORK_STATE`, `READ_BASIC_PHONE_STATE`, `SET_WALLPAPER`.
+  Picker galeri memakai system photo picker tanpa izin storage.
+- Uninstall memanggil `ACTION_DELETE`Android; konfirmasi ada pada dialog sistem.
+- Dynamic Color aktif di Android 12+; perangkat lama memakai palet bawaan.
 
 ## Lisensi Font
 
-- Plus Jakarta Sans — SIL Open Font License (`licenses/OFL-PlusJakartaSans.txt`)
-- Rubik — SIL Open Font License (`licenses/OFL-Rubik.txt`)
-- Material Symbols — Apache License 2.0 (`licenses/LICENSE-MaterialSymbols.txt`)
-
-Ikon Material Symbols telah di-subset menjadi dua file kecil (outlined & filled) pada
-`android/app/src/main/assets/fonts/`.
+- Hack — MIT (`licenses/LICENSE-Hack.txt`)
+- Inter — SIL OFL (`licenses/OFL-Inter.txt`)
+- Liberation Sans — SIL OFL (`licenses/OFL-Liberation.txt`)
+- Plus Jakarta Sans, Rubik — SIL OFL (`licenses/OFL-PlusJakartaSans.txt`, `licenses/OFL-Rubik.txt`)
+- Material Symbols — Apache 2.0 (`licenses/LICENSE-MaterialSymbols.txt`), di-subset ke ikon yang dipakai

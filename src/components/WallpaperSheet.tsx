@@ -8,6 +8,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  type TextStyle,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -25,7 +26,7 @@ import {
 } from '../utils/smartCrop';
 import { wallpaperUri } from '../services/WallpaperService';
 import { colors } from '../theme/colors';
-import { fonts } from '../theme/typography';
+import { useTypography } from '../theme/TypographyContext';
 import { Icon } from './Icon';
 
 interface WallpaperSheetProps {
@@ -62,6 +63,15 @@ export function WallpaperSheet({
   const [picking, setPicking] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { fonts, scaled } = useTypography();
+  const textStyle = (
+    style: TextStyle,
+    size: number,
+    bold = false,
+  ): TextStyle[] => [
+    style,
+    { fontFamily: bold ? fonts.bodyBold : fonts.body, fontSize: scaled(size) },
+  ];
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const screenAspect = screenWidth / Math.max(screenHeight, 1);
   const panelHeight = Math.min(screenHeight - 24, 430);
@@ -246,8 +256,8 @@ export function WallpaperSheet({
                 <Icon name="wallpaper" size={19} color={colors.primary} />
               </View>
               <View style={styles.titleTextGroup}>
-                <Text style={styles.title}>Wallpaper</Text>
-                <Text style={styles.subtitle} numberOfLines={1}>
+                <Text style={textStyle(styles.title, 17, true)}>Wallpaper</Text>
+                <Text style={textStyle(styles.subtitle, 11.5)} numberOfLines={1}>
                   Pilih gambar dan atur titik fokus crop landscape
                 </Text>
               </View>
@@ -315,7 +325,7 @@ export function WallpaperSheet({
                   {!wallpaper ? (
                     <View style={styles.placeholder}>
                       <Icon name="image" size={30} color={colors.textMuted} />
-                      <Text style={styles.placeholderText}>
+                      <Text style={textStyle(styles.placeholderText, 12)}>
                         Belum ada wallpaper
                       </Text>
                     </View>
@@ -359,7 +369,7 @@ export function WallpaperSheet({
                         size={12}
                         color={colors.textSecondary}
                       />
-                      <Text style={styles.previewBadgeText}>
+                      <Text style={textStyle(styles.previewBadgeText, 10)}>
                         Geser untuk mengatur
                       </Text>
                     </View>
@@ -385,7 +395,7 @@ export function WallpaperSheet({
                 ) : (
                   <Icon name="gallery" size={17} color={colors.primary} />
                 )}
-                <Text style={styles.pickText} numberOfLines={1}>
+                <Text style={textStyle(styles.pickText, 12.5, true)} numberOfLines={1}>
                   {picking
                     ? 'Membuka galeri…'
                     : wallpaper
@@ -394,13 +404,13 @@ export function WallpaperSheet({
                 </Text>
               </Pressable>
 
-              <Text style={styles.hint}>
+              <Text style={textStyle(styles.hint, 11)}>
                 {wallpaper
                   ? 'Geser gambar pada pratinjau untuk memilih bagian yang ditampilkan.'
                   : 'Gunakan foto landscape agar hasil crop lebih optimal.'}
               </Text>
 
-              <Text style={styles.zoomLabel}>UKURAN CROP</Text>
+              <Text style={textStyle(styles.zoomLabel, 9, true)}>UKURAN CROP</Text>
 
               <View style={styles.zoomRow}>
                 <Pressable
@@ -418,7 +428,7 @@ export function WallpaperSheet({
                 </Pressable>
 
                 <View style={styles.zoomValue}>
-                  <Text style={styles.zoomValueText}>
+                  <Text style={textStyle(styles.zoomValueText, 12, true)}>
                     {Math.round(draft.zoom * 100)}%
                   </Text>
                 </View>
@@ -455,7 +465,7 @@ export function WallpaperSheet({
           </View>
 
           {error ? (
-            <Text style={styles.error} numberOfLines={2}>
+            <Text style={textStyle(styles.error, 11.5)} numberOfLines={2}>
               {error}
             </Text>
           ) : null}
@@ -475,7 +485,7 @@ export function WallpaperSheet({
                 ]}
               >
                 <Icon name="trash" size={16} color={colors.danger} />
-                <Text style={styles.removeText}>Hapus</Text>
+                <Text style={textStyle(styles.removeText, 12)}>Hapus</Text>
               </Pressable>
             ) : (
               <View />
@@ -493,7 +503,7 @@ export function WallpaperSheet({
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={styles.secondaryText}>Batal</Text>
+                <Text style={textStyle(styles.secondaryText, 12.5)}>Batal</Text>
               </Pressable>
 
               <Pressable
@@ -512,7 +522,7 @@ export function WallpaperSheet({
                 ) : (
                   <Icon name="check" size={16} color={colors.background} />
                 )}
-                <Text style={styles.primaryText}>Simpan</Text>
+                <Text style={textStyle(styles.primaryText, 12.5, true)}>Simpan</Text>
               </Pressable>
             </View>
           </View>
@@ -564,13 +574,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   title: {
-    fontFamily: fonts.displaySemiBold,
-    fontSize: 17,
     color: colors.textPrimary,
   },
   subtitle: {
-    fontFamily: fonts.body,
-    fontSize: 11.5,
     color: colors.textMuted,
     marginTop: 1,
   },
@@ -620,8 +626,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   placeholderText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
     color: colors.textMuted,
   },
   guide: {
@@ -663,8 +667,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(12, 13, 17, 0.7)',
   },
   previewBadgeText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 10,
     color: colors.textSecondary,
   },
   controls: {
@@ -685,19 +687,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryBorder,
   },
   pickText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12.5,
     color: colors.primary,
   },
   hint: {
-    fontFamily: fonts.body,
-    fontSize: 11,
     lineHeight: 15,
     color: colors.textMuted,
   },
   zoomLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 9,
     letterSpacing: 1.4,
     color: colors.textMuted,
     marginTop: 2,
@@ -727,14 +723,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   zoomValueText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12,
     color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   error: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 11.5,
     color: colors.danger,
     marginTop: 10,
   },
@@ -752,8 +744,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   removeText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
     color: colors.danger,
   },
   footerRight: {
@@ -772,8 +762,6 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
   },
   secondaryText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12.5,
     color: colors.textSecondary,
   },
   primaryButton: {
@@ -787,8 +775,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   primaryText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 12.5,
     color: colors.background,
   },
   disabled: {

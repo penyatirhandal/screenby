@@ -35,6 +35,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Locale
@@ -655,6 +656,136 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
       String.format(Locale.US, "#%06X", color and 0xFFFFFF)
 
   // ---------------------------------------------------------------------------------------------
+  // Launcher: game icons, uninstall and wallpaper colours
+  // ---------------------------------------------------------------------------------------------
+
+  @ReactMethod
+  fun importGameIcon(uriString: String, promise: Promise) {
+    try {
+      promise.resolve(importGameIconInternal(uriString))
+    } catch (e: OutOfMemoryError) {
+      promise.reject("E_ICON_MEMORY", "Gambar terlalu besar untuk diproses.", e)
+    } catch (e: Exception) {
+      promise.reject("E_ICON", e.message ?: "Gagal menyimpan ikon.", e)
+    }
+  }
+
+  /** Centre-crops a gallery image to a square PNG in app-private storage. */
+  private fun importGameIconInternal(uriString: String): WritableMap {
+    val uri = Uri.parse(uriString)
+    val resolver = reactContext.contentResolver
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+      throw IOException("Format gambar tidak didukung.")
+    }
+
+    var sampleSize = 1
+    while (max(bounds.outWidth, bounds.outHeight) / sampleSize > GAME_ICON_SIZE * 2) {
+      sampleSize *= 2
+    }
+
+    var bitmap =
+        resolver.openInputStream(uri)?.use {
+          BitmapFactory.decodeStream(
+              it,
+              null,
+              BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+              }
+          )
+        } ?: throw IOException("Gambar tidak dapat dibaca.")
+
+    val orientation =
+        try {
+          resolver.openInputStream(uri)?.use {
+            ExifInterface(it)
+                .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+          } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (_: Exception) {
+          ExifInterface.ORIENTATION_NORMAL
+        }
+    bitmap = applyOrientation(bitmap, orientation)
+
+    val side = minOf(bitmap.width, bitmap.height)
+    val square = Bitmap.createBitmap(
+        bitmap,
+        (bitmap.width - side) / 2,
+        (bitmap.height - side) / 2,
+        side,
+        side
+    )
+    if (square !== bitmap) {
+      bitmap.recycle()
+    }
+
+    val icon = Bitmap.createScaledBitmap(square, GAME_ICON_SIZE, GAME_ICON_SIZE, true)
+    if (icon !== square) {
+      square.recycle()
+    }
+
+    val directory = File(reactContext.filesDir, GAME_ICON_DIRECTORY).apply { mkdirs() }
+    val file = File(directory, "game-${System.currentTimeMillis()}.png")
+    FileOutputStream(file).use { output ->
+      if (!icon.compress(Bitmap.CompressFormat.PNG, 92, output)) {
+        throw IOException("Gagal mengompres ikon.")
+      }
+    }
+    icon.recycle()
+
+    return Arguments.createMap().apply {
+      putString("path", file.absolutePath)
+      putInt("width", GAME_ICON_SIZE)
+      putInt("height", GAME_ICON_SIZE)
+    }
+  }
+
+  @ReactMethod
+  fun deleteFile(path: String, promise: Promise) {
+    try {
+      val file = File(path)
+      val allowed = file.absolutePath.startsWith(reactContext.filesDir.absolutePath)
+      promise.resolve(allowed && file.isFile && file.delete())
+    } catch (_: Exception) {
+      promise.resolve(false)
+    }
+  }
+
+  @ReactMethod
+  fun uninstallApp(packageName: String, promise: Promise) {
+    try {
+      val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName"))
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      reactContext.startActivity(intent)
+      promise.resolve(true)
+    } catch (e: ActivityNotFoundException) {
+      promise.reject("E_UNINSTALL", "Tidak dapat membuka dialog uninstall.", e)
+    } catch (e: Exception) {
+      promise.reject("E_UNINSTALL", e.message ?: "Gagal menghapus aplikasi.", e)
+    }
+  }
+
+  @ReactMethod
+  fun setSystemWallpaper(path: String, promise: Promise) {
+    try {
+      val file = File(path)
+      if (!file.isFile) {
+        promise.resolve(false)
+        return
+      }
+      val manager = WallpaperManager.getInstance(reactContext)
+      FileInputStream(file).use { input ->
+        manager.setStream(input, null, true, WallpaperManager.FLAG_SYSTEM)
+      }
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("E_WALLPAPER_SET", e.message ?: "Gagal mengatur wallpaper sistem.", e)
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Unlock / lifecycle helpers
   // ---------------------------------------------------------------------------------------------
 
@@ -697,6 +828,8 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     private const val EVENT_BATTERY = "NexusBattery"
     private const val EVENT_NETWORK = "NexusNetwork"
     private const val WALLPAPER_DIRECTORY = "wallpapers"
+    private const val GAME_ICON_DIRECTORY = "game-icons"
+    private const val GAME_ICON_SIZE = 512
     private const val MAX_WALLPAPER_DIMENSION = 2560
   }
 }

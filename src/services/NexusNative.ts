@@ -20,6 +20,10 @@ interface NexusNativeInterface {
   getInstalledApps(): Promise<LauncherApp[]>;
   launchApp(packageName: string): Promise<boolean>;
   getWallpaperColors(): Promise<WallpaperColors | null>;
+  importGameIcon(uri: string): Promise<ImportedWallpaper>;
+  deleteFile(path: string): Promise<boolean>;
+  uninstallApp(packageName: string): Promise<boolean>;
+  setSystemWallpaper(path: string): Promise<boolean>;
   addListener(eventName: string): void;
   removeListeners(count: number): void;
 }
@@ -110,6 +114,28 @@ export const NexusNative = {
     return nativeModule
       ? nativeModule.getWallpaperColors()
       : Promise.resolve(null);
+  },
+
+  importGameIcon(uri: string): Promise<ImportedWallpaper> {
+    return nativeModule ? nativeModule.importGameIcon(uri) : unavailable();
+  },
+
+  deleteFile(path: string): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.deleteFile(path)
+      : Promise.resolve(false);
+  },
+
+  uninstallApp(packageName: string): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.uninstallApp(packageName)
+      : Promise.resolve(false);
+  },
+
+  setSystemWallpaper(path: string): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.setSystemWallpaper(path)
+      : Promise.resolve(false);
   },
 };
 
