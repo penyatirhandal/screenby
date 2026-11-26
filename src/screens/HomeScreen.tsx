@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   Alert,
   FlatList,
@@ -10,8 +10,6 @@ import {
   useWindowDimensions,
   View,
   type GestureResponderEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -29,6 +27,7 @@ import {WidgetPickerSheet} from '../components/WidgetPickerSheet';
 import {useBattery} from '../hooks/useBattery';
 import {useClock, type ClockInfo} from '../hooks/useClock';
 import {useNetwork} from '../hooks/useNetwork';
+import {useNowPlaying, type NowPlayingController} from '../hooks/useNowPlaying';
 import AppWidgetView from '../native/AppWidgetViewNativeComponent';
 import {NexusWidgets} from '../services/NexusWidgets';
 import {wallpaperUri} from '../services/WallpaperService';
@@ -78,13 +77,14 @@ const TABS: {key: HomeTab; label: string}[] = [
   {key: 'games', label: 'GAMES'},
 ];
 
-const RAIL_GAP = 10;
+const GAME_GAP = 12;
 const DEFAULT_BUILTIN_SIZE = {width: 0.26, height: 0.34};
 const DEFAULT_APP_WIDGET_SIZE = {width: 0.34, height: 0.44};
 
 const BUILTIN_LABELS: Record<BuiltinWidget, string> = {
   clock: 'Jam',
   date: 'Tanggal',
+  music: 'Musik',
   battery: 'Baterai',
   network: 'Jaringan',
 };
@@ -152,10 +152,10 @@ export function HomeScreen({
   const clock = useClock();
   const battery = useBattery();
   const network = useNetwork();
+  const media = useNowPlaying();
 
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [wallpaperFailed, setWallpaperFailed] = useState(false);
-  const railRef = useRef<FlatList<PinnedGame>>(null);
+  const [gameAreaSize, setGameAreaSize] = useState({width: 0, height: 0});
 
   const visibleGames = useMemo(
     () => [...games].sort((a, b) => b.pinnedAt - a.pinnedAt),
@@ -179,38 +179,18 @@ export function HomeScreen({
     setWallpaperFailed(false);
   }, [wallpaper?.path]);
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [tab]);
-
-  useEffect(() => {
-    if (selectedIndex >= visibleGames.length) {
-      setSelectedIndex(0);
-    }
-  }, [selectedIndex, visibleGames.length]);
-
-  const selected = visibleGames[selectedIndex] ?? null;
   const compact = height < 400;
-  const heroSize = clamp(Math.min(height * 0.58, width * 0.28), 150, 620);
-  const iconSize = clamp(height * 0.1, 58, 96);
   const connection = presentNetwork(network);
   const batteryLevel = battery?.level ?? -1;
-
-  const handleRailScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (visibleGames.length === 0) {
-        return;
-      }
-      const step = iconSize + RAIL_GAP;
-      const index = clamp(
-        Math.round(event.nativeEvent.contentOffset.x / step),
-        0,
-        visibleGames.length - 1,
-      );
-      setSelectedIndex(index);
-    },
-    [iconSize, visibleGames.length],
+  const gameCardSize = clamp(
+    Math.min(gameAreaSize.height * 0.74, (gameAreaSize.width || width) / 3.4),
+    108,
+    260,
   );
+  const gameSidePadding =
+    visibleGames.length <= 1
+      ? Math.max(12, ((gameAreaSize.width || width) - gameCardSize) / 2)
+      : 12;
 
   return (
     <View style={[StyleSheet.absoluteFill, {backgroundColor: palette.background}]}>
@@ -315,141 +295,84 @@ export function HomeScreen({
             clock={clock}
             battery={battery}
             network={network}
+            media={media}
             onAddBuiltinWidget={onAddBuiltinWidget}
             onAddAppWidget={onAddAppWidget}
             onUpdateWidget={onUpdateWidget}
             onRemoveWidget={onRemoveWidget}
           />
-        ) : selected ? (
-          <View style={styles.gamesArea}>
-            <View style={[styles.gameDetail, {width: heroSize}]}>
-              <Text
-                style={[
-                  styles.gameTitle,
-                  {
-                    color: palette.textPrimary,
-                    fontFamily: fonts.displayBold,
-                    fontSize: scaled(compact ? 20 : 28),
-                  },
-                ]}
-                numberOfLines={1}
-                accessibilityLabel={`Game ${displayName(selected)}`}
-              >
-                {displayName(selected)}
-              </Text>
-
-              <Pressable
-                onPress={() => onPlay(selected)}
-                onLongPress={() => onLongPressGame(selected)}
-                accessibilityRole="button"
-                accessibilityLabel={`Mainkan ${displayName(selected)}`}
-                style={({pressed}) => [
-                  styles.hero,
-                  {
-                    width: heroSize,
-                    height: heroSize,
-                    borderColor: palette.primary,
-                    backgroundColor: withAlpha(palette.surface, 0.75),
-                  },
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Artwork game={selected} large />
-              </Pressable>
-
-              <View
-                style={[
-                  styles.metadataCard,
-                  {
-                    backgroundColor: withAlpha(palette.background, 0.52),
-                    borderColor: palette.glassBorder,
-                  },
-                ]}
-              >
-                <MetaRow label="Rilis" value={selected.releaseYear || '—'} />
-                <MetaRow label="Genre" value={selected.genre || '—'} />
-                <MetaRow label="Dev" value={selected.developer || '—'} />
-                <MetaRow label="Publisher" value={selected.publisher || '—'} />
-              </View>
-            </View>
-
+        ) : visibleGames.length > 0 ? (
+          <View
+            style={styles.gamesArea}
+            onLayout={event => {
+              const {width: nextWidth, height: nextHeight} =
+                event.nativeEvent.layout;
+              setGameAreaSize({width: nextWidth, height: nextHeight});
+            }}
+          >
             <FlatList
-              ref={railRef}
               horizontal
               data={visibleGames}
               keyExtractor={item => item.packageName}
               showsHorizontalScrollIndicator={false}
-              style={styles.rail}
-              contentContainerStyle={styles.railContent}
-              onScroll={handleRailScroll}
-              scrollEventThrottle={32}
-              snapToInterval={iconSize + RAIL_GAP}
+              style={styles.gameRow}
+              contentContainerStyle={[
+                styles.gameRowContent,
+                {paddingHorizontal: gameSidePadding},
+              ]}
+              snapToInterval={gameCardSize + GAME_GAP}
               snapToAlignment="start"
               decelerationRate="fast"
               getItemLayout={(_data, index) => ({
-                length: iconSize + RAIL_GAP,
-                offset: (iconSize + RAIL_GAP) * index,
+                length: gameCardSize + GAME_GAP,
+                offset: (gameCardSize + GAME_GAP) * index,
                 index,
               })}
-              onScrollToIndexFailed={info =>
-                railRef.current?.scrollToOffset({
-                  offset: (info.averageItemLength || iconSize + RAIL_GAP) * info.index,
-                  animated: true,
-                })
-              }
-              renderItem={({item, index}) => {
-                const active = index === selectedIndex;
-                return (
-                  <Pressable
-                    onPress={() => {
-                      setSelectedIndex(index);
-                      railRef.current?.scrollToIndex({
-                        index,
-                        animated: true,
-                        viewPosition: 0,
-                      });
-                      onPlay(item);
-                    }}
-                    onLongPress={() => onLongPressGame(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Mainkan ${displayName(item)}`}
-                    style={({pressed}) => [
-                      styles.railCard,
-                      {
-                        width: iconSize,
-                        height: iconSize,
-                        borderColor: active ? palette.primary : palette.glassBorder,
-                        backgroundColor: withAlpha(palette.surface, 0.82),
-                      },
-                      pressed && styles.pressed,
+              renderItem={({item}) => (
+                <Pressable
+                  onPress={() => onPlay(item)}
+                  onLongPress={() => onLongPressGame(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mainkan ${displayName(item)}`}
+                  style={({pressed}) => [
+                    styles.gameCard,
+                    {
+                      width: gameCardSize,
+                      height: gameCardSize,
+                      borderColor: palette.glassBorder,
+                      backgroundColor: withAlpha(palette.surface, 0.82),
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Artwork
+                    game={item}
+                    letterSize={scaled(gameCardSize * 0.34)}
+                  />
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={[
+                      withAlpha(palette.background, 0),
+                      withAlpha(palette.background, 0.94),
                     ]}
+                    locations={[0.42, 1]}
+                    style={styles.gameCardFade}
+                  />
+                  <Text
+                    style={[
+                      styles.gameCardLabel,
+                      {
+                        color: palette.textPrimary,
+                        fontFamily: fonts.bodyBold,
+                        fontSize: scaled(clamp(gameCardSize * 0.085, 11, 18)),
+                      },
+                    ]}
+                    numberOfLines={2}
                   >
-                    <Artwork game={item} />
-                    <LinearGradient
-                      pointerEvents="none"
-                      colors={[
-                        withAlpha(palette.background, 0),
-                        withAlpha(palette.background, 0.92),
-                      ]}
-                      locations={[0.35, 1]}
-                      style={styles.railFade}
-                    />
-                    <Text
-                      style={[
-                        styles.railLabel,
-                        {
-                          color: palette.textPrimary,
-                          fontFamily: fonts.body,
-                          fontSize: scaled(9),
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {displayName(item)}
-                    </Text>
-                  </Pressable>
-                );
-              }}
+                    {displayName(item)}
+                  </Text>
+                </Pressable>
+              )}
             />
           </View>
         ) : (
@@ -509,12 +432,6 @@ export function HomeScreen({
           <ActionButton icon="apps" label="Apps" onPress={onOpenApps} />
           <ActionButton icon="settings" label="Settings" onPress={onOpenSettings} />
           <ActionButton icon="search" label="Search" onPress={onOpenApps} />
-          <ActionButton
-            icon="play"
-            label="Play"
-            onPress={() => selected && onPlay(selected)}
-            primary
-          />
         </View>
       </View>
     </View>
@@ -526,6 +443,7 @@ interface DesktopCanvasProps {
   clock: ClockInfo;
   battery: BatteryState | null;
   network: NetworkState | null;
+  media: NowPlayingController;
   onAddBuiltinWidget: HomeScreenProps['onAddBuiltinWidget'];
   onAddAppWidget: HomeScreenProps['onAddAppWidget'];
   onUpdateWidget: HomeScreenProps['onUpdateWidget'];
@@ -551,6 +469,7 @@ function DesktopCanvas({
   clock,
   battery,
   network,
+  media,
   onAddBuiltinWidget,
   onAddAppWidget,
   onUpdateWidget,
@@ -805,6 +724,7 @@ function DesktopCanvas({
                 clock={clock}
                 battery={battery}
                 network={network}
+                media={media}
                 widthPx={pixelWidth}
                 heightPx={pixelHeight}
               />
@@ -884,6 +804,7 @@ function BuiltinWidgetCard({
   clock,
   battery,
   network,
+  media,
   widthPx,
   heightPx,
 }: {
@@ -893,11 +814,194 @@ function BuiltinWidgetCard({
   network: NetworkState | null;
   widthPx: number;
   heightPx: number;
+  media: NowPlayingController;
 }): React.JSX.Element {
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
   const connection = presentNetwork(network);
   const level = battery?.level ?? -1;
+
+  if (widget === 'music') {
+    const artSize = clamp(Math.min(heightPx * 0.42, widthPx * 0.2), 22, 56);
+    const titleSize = clamp(Math.min(widthPx * 0.085, heightPx * 0.15), 10, 15);
+    const metaSize = clamp(titleSize * 0.82, 9, 12);
+    const controlSize = clamp(Math.min(widthPx * 0.09, heightPx * 0.22), 11, 20);
+    const track = media.state;
+
+    if (!media.accessGranted) {
+      return (
+        <View style={[styles.builtinCard, styles.musicCard, styles.musicCenter]}>
+          <Icon
+            name="musicNote"
+            size={scaled(clamp(heightPx * 0.28, 14, 26))}
+            color={palette.primary}
+          />
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.musicHint,
+              {
+                color: palette.textSecondary,
+                fontFamily: fonts.body,
+                fontSize: scaled(metaSize),
+              },
+            ]}
+          >
+            Musik · izinkan akses notifikasi
+          </Text>
+          <Pressable
+            onPress={media.openAccessSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Izinkan akses notifikasi"
+            style={({pressed}) => [
+              styles.musicGrant,
+              {borderColor: palette.primary},
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.musicGrantText,
+                {
+                  color: palette.primary,
+                  fontFamily: fonts.bodyBold,
+                  fontSize: scaled(metaSize),
+                },
+              ]}
+            >
+              IZINKAN
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (!track.hasSession) {
+      return (
+        <View style={[styles.builtinCard, styles.musicCard, styles.musicCenter]}>
+          <Icon
+            name="musicNote"
+            size={scaled(clamp(heightPx * 0.3, 16, 30))}
+            color={palette.primary}
+          />
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.musicHint,
+              {
+                color: palette.textSecondary,
+                fontFamily: fonts.body,
+                fontSize: scaled(metaSize + 1),
+              },
+            ]}
+          >
+            Tidak ada lagu diputar
+          </Text>
+        </View>
+      );
+    }
+
+    const artwork = track.albumArtPath ? (
+      <Image
+        source={{uri: wallpaperUri(track.albumArtPath)}}
+        style={[styles.musicArt, {width: artSize, height: artSize}]}
+        accessibilityLabel="Sampul album"
+      />
+    ) : (
+      <View
+        style={[
+          styles.musicArt,
+          styles.musicArtFallback,
+          {
+            width: artSize,
+            height: artSize,
+            backgroundColor: withAlpha(palette.primary, 0.18),
+          },
+        ]}
+      >
+        <Icon
+          name="musicNote"
+          size={scaled(artSize * 0.55)}
+          color={palette.primary}
+        />
+      </View>
+    );
+
+    return (
+      <View style={[styles.builtinCard, styles.musicCard]}>
+        <View style={styles.musicTop}>
+          {artwork}
+          <View style={styles.musicInfo}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.musicTitle,
+                {
+                  color: palette.textPrimary,
+                  fontFamily: fonts.bodyBold,
+                  fontSize: scaled(titleSize),
+                },
+              ]}
+            >
+              {track.title || 'Lagu tanpa judul'}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.musicArtist,
+                {
+                  color: palette.textMuted,
+                  fontFamily: fonts.body,
+                  fontSize: scaled(metaSize),
+                },
+              ]}
+            >
+              {track.artist || track.album || 'Artis tidak diketahui'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.musicControls}>
+          <Pressable
+            onPress={() => media.control('previous')}
+            accessibilityRole="button"
+            accessibilityLabel="Lagu sebelumnya"
+            hitSlop={4}
+          >
+            <Icon
+              name="skipPrevious"
+              size={scaled(controlSize)}
+              color={palette.textSecondary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => media.control('playPause')}
+            accessibilityRole="button"
+            accessibilityLabel={track.playing ? 'Jeda musik' : 'Putar musik'}
+            hitSlop={4}
+          >
+            <Icon
+              name={track.playing ? 'pause' : 'play'}
+              size={scaled(controlSize * 1.1)}
+              color={palette.primary}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => media.control('next')}
+            accessibilityRole="button"
+            accessibilityLabel="Lagu berikutnya"
+            hitSlop={4}
+          >
+            <Icon
+              name="skipNext"
+              size={scaled(controlSize)}
+              color={palette.textSecondary}
+            />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (widget === 'clock') {
     const size = clamp(Math.min(widthPx * 0.24, heightPx * 0.52), 24, 120);
@@ -994,40 +1098,6 @@ function BuiltinWidgetCard({
   );
 }
 
-function MetaRow({label, value}: {label: string; value: string}): React.JSX.Element {
-  const palette = useLauncherPalette();
-  const {fonts, scaled} = useTypography();
-  return (
-    <View style={styles.metaRow}>
-      <Text
-        style={[
-          styles.metaLabel,
-          {
-            color: palette.textMuted,
-            fontFamily: fonts.bodyBold,
-            fontSize: scaled(9),
-          },
-        ]}
-      >
-        {label}
-      </Text>
-      <Text
-        numberOfLines={1}
-        style={[
-          styles.metaValue,
-          {
-            color: palette.textSecondary,
-            fontFamily: fonts.body,
-            fontSize: scaled(10),
-          },
-        ]}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 function ControllerKey({label}: {label: string}): React.JSX.Element {
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
@@ -1096,10 +1166,10 @@ function StatusChip({
 
 function Artwork({
   game,
-  large = false,
+  letterSize = 26,
 }: {
   game: PinnedGame;
-  large?: boolean;
+  letterSize?: number;
 }): React.JSX.Element {
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
@@ -1119,7 +1189,7 @@ function Artwork({
             {
               color: palette.primary,
               fontFamily: fonts.displayBold,
-              fontSize: scaled(large ? 72 : 26),
+              fontSize: scaled(letterSize),
             },
           ]}
         >
@@ -1303,6 +1373,58 @@ const styles = StyleSheet.create({
   infoDetail: {
     marginTop: 1,
   },
+  musicCard: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  musicTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  musicArt: {
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  musicArtFallback: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  musicInfo: {
+    flexShrink: 1,
+    gap: 1,
+  },
+  musicTitle: {
+    letterSpacing: 0.1,
+  },
+  musicArtist: {
+    letterSpacing: 0.1,
+  },
+  musicControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  musicCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  musicHint: {
+    textAlign: 'center',
+  },
+  musicGrant: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  musicGrantText: {
+    letterSpacing: 0.8,
+  },
   modeBanner: {
     position: 'absolute',
     top: 8,
@@ -1327,68 +1449,37 @@ const styles = StyleSheet.create({
   gamesArea: {
     flex: 1,
     minHeight: 0,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
-  },
-  gameDetail: {
-    flexShrink: 0,
-    gap: 8,
-  },
-  gameTitle: {
-    letterSpacing: -0.5,
-  },
-  hero: {
-    borderRadius: 14,
-    borderWidth: 2,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  metadataCard: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 2,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaLabel: {
-    minWidth: 64,
-    letterSpacing: 0.6,
-  },
-  metaValue: {
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  rail: {
+  gameRow: {
     flexGrow: 0,
     flexShrink: 1,
   },
-  railContent: {
-    gap: RAIL_GAP,
+  gameRowContent: {
+    gap: GAME_GAP,
+    alignItems: 'center',
     paddingVertical: 2,
   },
-  railCard: {
-    borderRadius: 10,
+  gameCard: {
+    borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  railFade: {
+  gameCardFade: {
     ...StyleSheet.absoluteFill,
   },
-  railLabel: {
+  gameCardLabel: {
     textAlign: 'center',
     maxWidth: '100%',
-    paddingHorizontal: 2,
-    paddingBottom: 4,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 3,
   },
   empty: {
     flex: 1,

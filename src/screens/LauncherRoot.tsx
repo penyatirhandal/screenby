@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { ActionMenu, type MenuOption } from '../components/ActionMenu';
 import { GameEditSheet, type GameEditPatch } from '../components/GameEditSheet';
+import { GameInfoDialog } from '../components/GameInfoDialog';
 import { useGameLibrary } from '../hooks/useGameLibrary';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
 import { useWallpaper } from '../hooks/useWallpaper';
@@ -31,12 +32,14 @@ export function LauncherRoot({
   const [homeTab, setHomeTab] = useState<HomeTab>('desktop');
   const [editing, setEditing] = useState<PinnedGame | null>(null);
   const [menuGame, setMenuGame] = useState<PinnedGame | null>(null);
+  const [infoGame, setInfoGame] = useState<PinnedGame | null>(null);
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
 
   const showLock = useCallback(() => {
     setMenuGame(null);
     setEditing(null);
+    setInfoGame(null);
     setHomeTab('desktop');
     setScreen('lock');
   }, []);
@@ -75,6 +78,10 @@ export function LauncherRoot({
           setEditing(null);
           return true;
         }
+        if (infoGame) {
+          setInfoGame(null);
+          return true;
+        }
         if (screen !== 'home') {
           setScreen('home');
         }
@@ -83,7 +90,7 @@ export function LauncherRoot({
       },
     );
     return () => subscription.remove();
-  }, [editing, screen]);
+  }, [editing, infoGame, screen]);
 
   const unlock = useCallback(() => {
     setHomeTab('desktop');
@@ -147,6 +154,13 @@ export function LauncherRoot({
           label: 'Play',
           icon: 'play',
           onPress: () => play(menuGame),
+        },
+        {
+          label: 'Info',
+          icon: 'info',
+          onPress: () => {
+            setInfoGame(menuGame);
+          },
         },
         {
           label: 'Edit',
@@ -224,6 +238,12 @@ export function LauncherRoot({
         onClose={() => setEditing(null)}
         onSave={saveEdit}
         onDelete={deleteEdit}
+      />
+
+      <GameInfoDialog
+        visible={infoGame !== null}
+        game={infoGame}
+        onClose={() => setInfoGame(null)}
       />
 
       <ActionMenu

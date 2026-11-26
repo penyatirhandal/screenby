@@ -19,6 +19,7 @@ import {Icon, type IconName} from './Icon';
 const BUILTIN_LABELS: Record<BuiltinWidget, string> = {
   clock: 'Jam',
   date: 'Tanggal',
+  music: 'Musik',
   battery: 'Baterai',
   network: 'Jaringan',
 };
@@ -26,6 +27,7 @@ const BUILTIN_LABELS: Record<BuiltinWidget, string> = {
 const BUILTIN_ICONS: Record<BuiltinWidget, IconName> = {
   clock: 'schedule',
   date: 'calendar',
+  music: 'musicNote',
   battery: 'batteryFull',
   network: 'wifi',
 };

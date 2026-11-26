@@ -88,7 +88,18 @@ export type FontChoice = 'hack' | 'inter' | 'arial';
 export type FontSizeChoice = 'small' | 'normal' | 'large' | 'xlarge';
 
 /** Built-in widgets rendered by React Native. */
-export type BuiltinWidget = 'clock' | 'date' | 'battery' | 'network';
+export type BuiltinWidget = 'clock' | 'date' | 'music' | 'battery' | 'network';
+
+/** Snapshot of the active Android media session, read by the music widget. */
+export interface NowPlayingState {
+  hasSession: boolean;
+  playing: boolean;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  albumArtPath: string | null;
+  packageName: string | null;
+}
 
 /** Layout is stored as 0..1 fractions so it survives rotation. */
 export interface DesktopWidgetLayout {

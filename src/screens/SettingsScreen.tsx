@@ -251,7 +251,9 @@ export function SettingsScreen({
           >
             Widget dikelola langsung dari tab DESKTOP di Home. Tekan lama area
             kosong untuk menambah widget, lalu tekan lama widget untuk
-            memindahkan, mengubah ukuran, atau menghapusnya.
+            memindahkan, mengubah ukuran, atau menghapusnya. Widget Musik
+            memerlukan izin Notification access dari Android untuk membaca lagu
+            yang sedang diputar.
           </Text>
         </Section>
 

@@ -12,6 +12,7 @@ class NexusPackage : ReactPackage {
       listOf(
           NexusNativeModule(reactContext),
           NexusWidgetModule(reactContext),
+          NexusMediaModule(reactContext),
       )
 
   override fun createViewManagers(

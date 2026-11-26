@@ -6,10 +6,14 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
-import android.view.View
 import android.view.View.MeasureSpec
+import android.view.ViewConfiguration
 import com.facebook.react.uimanager.PixelUtil
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Outer container that owns one host view and reports long-press to JS. */
@@ -18,24 +22,66 @@ internal class NexusAppWidgetView(context: Context) : AppWidgetHostView(context)
   var widthPx: Float = 0f
   var heightPx: Float = 0f
 
-  private var lastTouchX = 0f
-  private var lastTouchY = 0f
+  private val handler = Handler(Looper.getMainLooper())
+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+  private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+  private var downX = 0f
+  private var downY = 0f
+  private var longPressFired = false
   private var onLongPressListener: ((x: Float, y: Float) -> Unit)? = null
 
-  init {
-    setOnTouchListener { _: View, event: MotionEvent ->
-      lastTouchX = event.x
-      lastTouchY = event.y
-      false
-    }
-    setOnLongClickListener {
-      onLongPressListener?.invoke(lastTouchX, lastTouchY)
-      true
-    }
+  private val longPressRunnable = Runnable {
+    longPressFired = true
+    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    onLongPressListener?.invoke(downX, downY)
   }
 
   fun setLongPressListener(listener: (x: Float, y: Float) -> Unit) {
     onLongPressListener = listener
+  }
+
+  /**
+   * RemoteViews often contain clickable children that swallow long-clicks before
+   * a normal OnLongClickListener ever sees them. Intercept at the parent instead
+   * so every third-party widget stays editable.
+   */
+  override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        longPressFired = false
+        downX = event.x
+        downY = event.y
+        handler.removeCallbacks(longPressRunnable)
+        handler.postDelayed(longPressRunnable, longPressTimeout)
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (
+            !longPressFired &&
+            (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop)
+        ) {
+          handler.removeCallbacks(longPressRunnable)
+        }
+      }
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+        handler.removeCallbacks(longPressRunnable)
+      }
+    }
+    // Once the menu is open, keep the gesture away from the provider's controls.
+    return longPressFired
+  }
+
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    if (!longPressFired) {
+      return super.onTouchEvent(event)
+    }
+    if (
+        event.actionMasked == MotionEvent.ACTION_UP ||
+        event.actionMasked == MotionEvent.ACTION_CANCEL
+    ) {
+      longPressFired = false
+      handler.removeCallbacks(longPressRunnable)
+    }
+    return true
   }
 
   fun bind(context: Context, id: Int) {

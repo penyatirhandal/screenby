@@ -15,7 +15,16 @@ const STORAGE_KEY = '@nexus/launcher/settings/v1';
 export const DESKTOP_WIDGETS: BuiltinWidget[] = [
   'clock',
   'date',
+  'music',
   'battery',
+  'network',
+];
+
+/** The music widget now owns the middle-right slot in a fresh installation. */
+const DEFAULT_DESKTOP_WIDGETS: BuiltinWidget[] = [
+  'clock',
+  'date',
+  'music',
   'network',
 ];
 
@@ -25,6 +34,7 @@ const SIZES: FontSizeChoice[] = ['small', 'normal', 'large', 'xlarge'];
 const DEFAULT_LAYOUT: Record<BuiltinWidget, DesktopWidgetLayout> = {
   clock: {x: 0.05, y: 0.1, width: 0.33, height: 0.68},
   date: {x: 0.42, y: 0.1, width: 0.24, height: 0.22},
+  music: {x: 0.42, y: 0.39, width: 0.24, height: 0.26},
   battery: {x: 0.42, y: 0.39, width: 0.24, height: 0.22},
   network: {x: 0.42, y: 0.68, width: 0.24, height: 0.22},
 };
@@ -85,19 +95,34 @@ export function makeAppWidgetItem(
 }
 
 export function defaultDesktopItems(): DesktopWidgetItem[] {
-  return DESKTOP_WIDGETS.map(widget => makeBuiltinItem(widget));
+  return DEFAULT_DESKTOP_WIDGETS.map(widget => makeBuiltinItem(widget));
+}
+
+/** Existing installs had Baterai in the slot that now belongs to Musik. */
+function migrateLegacyWidgets(widgets: BuiltinWidget[]): BuiltinWidget[] {
+  const migrated: BuiltinWidget[] = [];
+  for (const widget of DESKTOP_WIDGETS) {
+    if (!widgets.includes(widget)) {
+      continue;
+    }
+    const target: BuiltinWidget = widget === 'battery' ? 'music' : widget;
+    if (!migrated.includes(target)) {
+      migrated.push(target);
+    }
+  }
+  return migrated;
 }
 
 function itemsFromLegacy(widgets: unknown): DesktopWidgetItem[] {
   if (!Array.isArray(widgets)) {
     return defaultDesktopItems();
   }
-  const allowed = new Set<BuiltinWidget>(DESKTOP_WIDGETS);
-  const selected = DESKTOP_WIDGETS.filter(widget => widgets.includes(widget));
+  const present = DESKTOP_WIDGETS.filter(widget => widgets.includes(widget));
+  const selected = migrateLegacyWidgets(present);
   if (selected.length === 0 && widgets.length > 0) {
     return defaultDesktopItems();
   }
-  return allowed.size > 0 ? selected.map(widget => makeBuiltinItem(widget)) : [];
+  return selected.map(widget => makeBuiltinItem(widget));
 }
 
 function sanitizeItems(value: unknown): DesktopWidgetItem[] {
@@ -177,12 +202,34 @@ function sanitizeItems(value: unknown): DesktopWidgetItem[] {
     });
   }
 
+  // One-time, idempotent replacement of the old default Baterai widget with
+  // Musik. A manually placed Baterai or an existing Musik widget is untouched.
+  const hasMusic = result.some(
+    item => item.kind === 'builtin' && item.widget === 'music',
+  );
+  if (!hasMusic) {
+    const defaultBattery = DEFAULT_LAYOUT.battery;
+    const index = result.findIndex(
+      item =>
+        item.kind === 'builtin' &&
+        item.widget === 'battery' &&
+        Math.abs(item.x - defaultBattery.x) < 0.01 &&
+        Math.abs(item.y - defaultBattery.y) < 0.01 &&
+        Math.abs(item.width - defaultBattery.width) < 0.01 &&
+        Math.abs(item.height - defaultBattery.height) < 0.01,
+    );
+    const target = result[index];
+    if (index >= 0 && target?.kind === 'builtin') {
+      result[index] = {...target, id: 'builtin-music', widget: 'music'};
+    }
+  }
+
   return result;
 }
 
 function sanitizeLegacyWidgets(value: unknown): BuiltinWidget[] {
   if (!Array.isArray(value)) {
-    return [...DESKTOP_WIDGETS];
+    return [...DEFAULT_DESKTOP_WIDGETS];
   }
   const seen = new Set<BuiltinWidget>();
   for (const item of value) {
@@ -190,7 +237,7 @@ function sanitizeLegacyWidgets(value: unknown): BuiltinWidget[] {
       seen.add(item as BuiltinWidget);
     }
   }
-  return DESKTOP_WIDGETS.filter(widget => seen.has(widget));
+  return migrateLegacyWidgets(DESKTOP_WIDGETS.filter(widget => seen.has(widget)));
 }
 
 function legacyWidgetsFromItems(items: DesktopWidgetItem[]): BuiltinWidget[] {
@@ -209,7 +256,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
       return {
         font: DEFAULT_SETTINGS.font,
         fontSize: DEFAULT_SETTINGS.fontSize,
-        desktopWidgets: [...DESKTOP_WIDGETS],
+        desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
         desktopItems: defaultDesktopItems(),
       };
     }
@@ -243,7 +290,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
     return {
       font: DEFAULT_SETTINGS.font,
       fontSize: DEFAULT_SETTINGS.fontSize,
-      desktopWidgets: [...DESKTOP_WIDGETS],
+      desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
       desktopItems: defaultDesktopItems(),
     };
   }
@@ -264,6 +311,6 @@ export async function saveSettings(
 export const DEFAULT_SETTINGS: LauncherSettings = {
   font: 'inter',
   fontSize: 'normal',
-  desktopWidgets: [...DESKTOP_WIDGETS],
+  desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
   desktopItems: defaultDesktopItems(),
 };
