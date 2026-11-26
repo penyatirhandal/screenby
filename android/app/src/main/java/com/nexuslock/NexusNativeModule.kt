@@ -639,9 +639,11 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
 
       promise.resolve(
           Arguments.createMap().apply {
-            putString("primary", toHex(colors.primaryColor))
-            colors.secondaryColor?.let { putString("secondary", toHex(it)) }
-            colors.tertiaryColor?.let { putString("tertiary", toHex(it)) }
+            putString("primary", toHex(colors.primaryColor.toArgb()))
+            colors.secondaryColor?.let {
+              putString("secondary", toHex(it.toArgb()))
+            }
+            colors.tertiaryColor?.let { putString("tertiary", toHex(it.toArgb())) }
           }
       )
     } catch (_: Exception) {
