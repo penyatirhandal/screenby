@@ -8,6 +8,7 @@ import { ScreenTransition } from '../components/ScreenTransition';
 import { WallpaperSheet } from '../components/WallpaperSheet';
 import { GamepadProvider } from '../gamepad/GamepadProvider';
 import { useGameLibrary } from '../hooks/useGameLibrary';
+import { useGamePlatforms } from '../hooks/useGamePlatforms';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
 import { useMusicCover } from '../hooks/useMusicCover';
 import { useNowPlaying } from '../hooks/useNowPlaying';
@@ -19,9 +20,11 @@ import {
 import { NexusRotation } from '../services/NexusRotation';
 import type { LauncherThemeController } from '../hooks/useLauncherTheme';
 import type {
+  GamePlatform,
   HomeTab,
   LauncherApp,
   PinnedGame,
+  PlatformGame,
   RotationLockMode,
   WallpaperSlot,
 } from '../types';
@@ -31,6 +34,31 @@ import { LockScreen } from './LockScreen';
 import { SettingsScreen } from './SettingsScreen';
 
 type Screen = 'home' | 'apps' | 'settings' | 'lock';
+
+interface PlatformGameRef {
+  platformId: string;
+  game: PlatformGame;
+}
+
+function platformGameAsPinned(
+  ref: PlatformGameRef,
+  platform: GamePlatform | undefined,
+): PinnedGame {
+  return {
+    // Used only as a readable source label in Info; edits are keyed by game.id.
+    packageName: platform ? `Platform · ${platform.name}` : 'Platform',
+    label: ref.game.name,
+    icon: null,
+    customLabel: ref.game.customLabel,
+    customIconPath: ref.game.customIconPath,
+    releaseYear: ref.game.releaseYear,
+    genre: ref.game.genre,
+    developer: ref.game.developer,
+    publisher: ref.game.publisher,
+    pinnedAt: ref.game.modifiedAt,
+    lastPlayedAt: ref.game.lastPlayedAt,
+  };
+}
 
 const APPS_LOADING_MIN_MS = 450;
 const APPS_LOADING_FALLBACK_MS = 2500;
@@ -51,11 +79,22 @@ export function LauncherRoot({
   const [infoGame, setInfoGame] = useState<PinnedGame | null>(null);
   const [wallpaperSheetSlot, setWallpaperSheetSlot] =
     useState<WallpaperSlot | null>(null);
+  // undefined = closed, null = add new platform, object = edit platform.
+  const [platformSheet, setPlatformSheet] = useState<
+    GamePlatform | null | undefined
+  >(undefined);
+  const [platformMenuGame, setPlatformMenuGame] =
+    useState<PlatformGameRef | null>(null);
+  const [platformInfoGame, setPlatformInfoGame] =
+    useState<PlatformGameRef | null>(null);
+  const [platformEditGame, setPlatformEditGame] =
+    useState<PlatformGameRef | null>(null);
   const [appsLoading, setAppsLoading] = useState(false);
   const appsOpenedAt = useRef(0);
   const appsMinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appsNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const library = useGameLibrary();
+  const platforms = useGamePlatforms();
   const wallpaper = useWallpaper();
   const media = useNowPlaying();
   const cover = useMusicCover();
@@ -65,6 +104,10 @@ export function LauncherRoot({
     setEditing(null);
     setInfoGame(null);
     setWallpaperSheetSlot(null);
+    setPlatformSheet(undefined);
+    setPlatformMenuGame(null);
+    setPlatformInfoGame(null);
+    setPlatformEditGame(null);
     setHomeTab('desktop');
     setScreen('lock');
   }, []);
@@ -213,6 +256,22 @@ export function LauncherRoot({
     if (screen === 'lock') {
       return;
     }
+    if (platformSheet !== undefined) {
+      setPlatformSheet(undefined);
+      return;
+    }
+    if (platformMenuGame) {
+      setPlatformMenuGame(null);
+      return;
+    }
+    if (platformEditGame) {
+      setPlatformEditGame(null);
+      return;
+    }
+    if (platformInfoGame) {
+      setPlatformInfoGame(null);
+      return;
+    }
     if (menuGame) {
       setMenuGame(null);
       return;
@@ -233,7 +292,17 @@ export function LauncherRoot({
       setScreen('home');
     }
     // A launcher never closes on Back.
-  }, [editing, infoGame, menuGame, screen, wallpaperSheetSlot]);
+  }, [
+    editing,
+    infoGame,
+    menuGame,
+    platformEditGame,
+    platformInfoGame,
+    platformMenuGame,
+    platformSheet,
+    screen,
+    wallpaperSheetSlot,
+  ]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -267,6 +336,43 @@ export function LauncherRoot({
     [library],
   );
 
+  const playPlatformGame = useCallback(
+    async (platformId: string, game: PlatformGame) => {
+      const platform = platforms.platforms.find(item => item.id === platformId);
+      if (!platform) {
+        return;
+      }
+      if (!platform.emulatorPackage) {
+        Alert.alert(
+          'Emulator belum dipilih',
+          'Buka Settings > Platform > Edit untuk memilih emulator.',
+        );
+        return;
+      }
+      try {
+        const opened = await NexusNative.launchGameFile(
+          game.uri,
+          platform.emulatorPackage,
+        );
+        if (!opened) {
+          Alert.alert('Tidak dapat membuka', `${game.name} tidak dapat dibuka.`);
+          return;
+        }
+        await platforms.updateGame(platformId, game.id, {
+          lastPlayedAt: Date.now(),
+        });
+      } catch (error) {
+        Alert.alert(
+          'Tidak dapat membuka',
+          error instanceof Error
+            ? error.message
+            : 'Periksa package emulator di Settings Platform.',
+        );
+      }
+    },
+    [platforms],
+  );
+
   const pin = useCallback(
     async (app: LauncherApp) => {
       await library.pin(app);
@@ -288,6 +394,20 @@ export function LauncherRoot({
     [editing, library],
   );
 
+  const savePlatformGameEdit = useCallback(
+    async (patch: GameEditPatch) => {
+      if (!platformEditGame) {
+        return;
+      }
+      const {platformId, game} = platformEditGame;
+      if (game.customIconPath && !patch.customIconPath) {
+        await NexusNative.deleteFile(game.customIconPath).catch(() => false);
+      }
+      await platforms.updateGame(platformId, game.id, patch);
+    },
+    [platformEditGame, platforms],
+  );
+
   const deleteEdit = useCallback(async () => {
     if (!editing) {
       return;
@@ -299,12 +419,28 @@ export function LauncherRoot({
     await theme.refresh();
   }, [theme]);
 
+  const homeTabs = useMemo<HomeTab[]>(
+    () => [
+      'desktop',
+      'games',
+      ...platforms.platforms.map(
+        platform => `platform:${platform.id}` as HomeTab,
+      ),
+    ],
+    [platforms.platforms],
+  );
+
   const gamepadHandlers = useMemo(
     () => ({
       onBack: handleBack,
       onShoulder: (side: 'left' | 'right') => {
         if (screen === 'home') {
-          setHomeTab(side === 'left' ? 'desktop' : 'games');
+          const current = Math.max(0, homeTabs.indexOf(homeTab));
+          const next =
+            side === 'left'
+              ? Math.max(0, current - 1)
+              : Math.min(homeTabs.length - 1, current + 1);
+          setHomeTab(homeTabs[next]);
         } else if (screen !== 'lock') {
           setWallpaperSheetSlot(null);
           setScreen('home');
@@ -322,7 +458,7 @@ export function LauncherRoot({
         }
       },
     }),
-    [handleBack, openApps, screen],
+    [handleBack, homeTab, homeTabs, openApps, screen],
   );
 
   const dynamicColorAvailable =
@@ -358,7 +494,50 @@ export function LauncherRoot({
           },
         },
       ]
-    : [];
+    : platformMenuGame
+      ? [
+          {
+            label: 'Play',
+            icon: 'play',
+            onPress: () =>
+              playPlatformGame(platformMenuGame.platformId, platformMenuGame.game),
+          },
+          {
+            label: 'Info',
+            icon: 'info',
+            onPress: () => setPlatformInfoGame(platformMenuGame),
+          },
+          {
+            label: 'Edit',
+            icon: 'edit',
+            onPress: () => setPlatformEditGame(platformMenuGame),
+          },
+        ]
+      : [];
+
+  const menuTitle = menuGame
+    ? menuGame.customLabel || menuGame.label
+    : platformMenuGame
+      ? platformMenuGame.game.customLabel || platformMenuGame.game.name
+      : undefined;
+
+  const platformInfoPinned = platformInfoGame
+    ? platformGameAsPinned(
+        platformInfoGame,
+        platforms.platforms.find(item => item.id === platformInfoGame.platformId),
+      )
+    : null;
+  const platformEditPinned = platformEditGame
+    ? platformGameAsPinned(
+        platformEditGame,
+        platforms.platforms.find(item => item.id === platformEditGame.platformId),
+      )
+    : null;
+
+  const closeGameMenu = useCallback(() => {
+    setMenuGame(null);
+    setPlatformMenuGame(null);
+  }, []);
 
   return (
     <GamepadProvider handlers={gamepadHandlers}>
@@ -366,6 +545,7 @@ export function LauncherRoot({
         <ScreenTransition key="home" style={StyleSheet.absoluteFill}>
           <HomeScreen
             games={library.games}
+            platforms={platforms.platforms}
             tab={homeTab}
             onTabChange={setHomeTab}
             desktopItems={settings.settings.desktopItems}
@@ -380,7 +560,11 @@ export function LauncherRoot({
             }}
             onLock={showLock}
             onPlay={game => play(game)}
+            onPlayPlatformGame={playPlatformGame}
             onLongPressGame={setMenuGame}
+            onLongPressPlatformGame={(platformId, game) =>
+              setPlatformMenuGame({platformId, game})
+            }
             onAddBuiltinWidget={settings.addBuiltinWidget}
             onAddAppWidget={settings.addAppWidget}
             onUpdateWidget={settings.updateWidget}
@@ -433,6 +617,7 @@ export function LauncherRoot({
             visible
             onClose={() => {
               setWallpaperSheetSlot(null);
+              setPlatformSheet(undefined);
               setScreen('home');
             }}
             settings={settings.settings}
@@ -444,6 +629,14 @@ export function LauncherRoot({
             onOpenWallpaper={slot => setWallpaperSheetSlot(slot)}
             onRemoveWallpaper={slot => wallpaper.remove(slot)}
             dynamicColorAvailable={dynamicColorAvailable}
+            platforms={platforms.platforms}
+            emulatorOptions={platforms.emulatorOptions}
+            platformsLoading={platforms.loading}
+            onAddPlatform={platforms.add}
+            onUpdatePlatform={platforms.update}
+            onRefreshPlatform={platforms.refreshGames}
+            platformSheet={platformSheet}
+            onPlatformSheetChange={setPlatformSheet}
           />
         </ScreenTransition>
       ) : null}
@@ -490,17 +683,30 @@ export function LauncherRoot({
         onDelete={deleteEdit}
       />
 
+      <GameEditSheet
+        visible={platformEditGame !== null}
+        game={platformEditPinned}
+        onClose={() => setPlatformEditGame(null)}
+        onSave={savePlatformGameEdit}
+      />
+
       <GameInfoDialog
         visible={infoGame !== null}
         game={infoGame}
         onClose={() => setInfoGame(null)}
       />
 
+      <GameInfoDialog
+        visible={platformInfoGame !== null}
+        game={platformInfoPinned}
+        onClose={() => setPlatformInfoGame(null)}
+      />
+
       <ActionMenu
-        visible={menuGame !== null}
-        title={menuGame ? menuGame.customLabel || menuGame.label : undefined}
+        visible={menuGame !== null || platformMenuGame !== null}
+        title={menuTitle}
         options={menuOptions}
-        onClose={() => setMenuGame(null)}
+        onClose={closeGameMenu}
       />
 
       <AppsLoadingOverlay visible={appsLoading} />

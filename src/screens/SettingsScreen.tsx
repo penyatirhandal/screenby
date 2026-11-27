@@ -10,6 +10,8 @@ import {
   type ViewInstance,
 } from 'react-native';
 import { Icon, type IconName } from '../components/Icon';
+import { PlatformSheet } from '../components/PlatformSheet';
+import type { EmulatorOption } from '../constants/emulators';
 import { Focusable } from '../gamepad/GamepadProvider';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { withAlpha } from '../theme/colorUtils';
@@ -24,7 +26,9 @@ import type {
   FontChoice,
   FontSizeChoice,
   GameIconSize,
+  GamePlatform,
   LauncherSettings,
+  PlatformInput,
   RotationLockMode,
   Wallpaper,
   WallpaperSet,
@@ -64,6 +68,14 @@ interface SettingsScreenProps {
   onOpenWallpaper: (slot: WallpaperSlot) => void;
   onRemoveWallpaper: (slot: WallpaperSlot) => Promise<void>;
   dynamicColorAvailable: boolean;
+  platforms: GamePlatform[];
+  emulatorOptions: EmulatorOption[];
+  platformsLoading: boolean;
+  onAddPlatform: (input: PlatformInput) => Promise<GamePlatform>;
+  onUpdatePlatform: (id: string, patch: Partial<PlatformInput>) => Promise<void>;
+  onRefreshPlatform: (id: string) => Promise<number>;
+  platformSheet: GamePlatform | null | undefined;
+  onPlatformSheetChange: (value: GamePlatform | null | undefined) => void;
 }
 
 export function SettingsScreen({
@@ -78,10 +90,21 @@ export function SettingsScreen({
   onOpenWallpaper,
   onRemoveWallpaper,
   dynamicColorAvailable,
+  platforms,
+  emulatorOptions,
+  platformsLoading,
+  onAddPlatform,
+  onUpdatePlatform,
+  onRefreshPlatform,
+  platformSheet,
+  onPlatformSheetChange,
 }: SettingsScreenProps): React.JSX.Element | null {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
   const [applying, setApplying] = useState(false);
+  const [refreshingPlatform, setRefreshingPlatform] = useState<string | null>(
+    null,
+  );
   const scrollRef = React.useRef<ScrollViewInstance>(null);
   const scrollOffset = React.useRef(0);
   const optionRefs = React.useRef(new Map<string, ViewInstance>());
@@ -169,6 +192,39 @@ export function SettingsScreen({
         },
       ],
     );
+  };
+
+  const submitPlatform = async (input: PlatformInput) => {
+    if (platformSheet) {
+      await onUpdatePlatform(platformSheet.id, input);
+    } else {
+      await onAddPlatform(input);
+    }
+  };
+
+  const refreshPlatform = async (platform: GamePlatform) => {
+    if (refreshingPlatform) {
+      return;
+    }
+    setRefreshingPlatform(platform.id);
+    try {
+      const count = await onRefreshPlatform(platform.id);
+      Alert.alert(
+        'Scan selesai',
+        count > 0
+          ? `Ditemukan ${count} game di folder ${platform.folderName}.`
+          : 'Tidak ada game dengan ekstensi platform ini di folder tersebut.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Gagal memindai',
+        error instanceof Error
+          ? error.message
+          : 'Pilih ulang folder melalui tombol Edit.',
+      );
+    } finally {
+      setRefreshingPlatform(null);
+    }
   };
 
   return (
@@ -348,6 +404,160 @@ export function SettingsScreen({
           ))}
         </Section>
 
+        <Section title="PLATFORM" icon="gamepad">
+          <Text
+            style={[
+              styles.description,
+              {
+                color: palette.textSecondary,
+                fontFamily: fonts.body,
+                fontSize: scaled(13),
+              },
+            ]}
+          >
+            Tambah platform emulator atau game PlayStation. Setiap platform
+            mendapat tab sendiri di Home, dengan game hasil scan dari folder
+            pilihan.
+          </Text>
+          <View style={styles.buttonRow}>
+            <Focusable
+              id="settings:platform:add"
+              style={({pressed}) => [
+                styles.button,
+                {borderColor: palette.primaryBorder},
+                pressed && styles.pressed,
+              ]}
+              onPress={() => onPlatformSheetChange(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Tambah platform"
+            >
+              <Text
+                style={[
+                  styles.buttonText,
+                  {
+                    color: palette.primary,
+                    fontFamily: fonts.bodySemiBold,
+                    fontSize: scaled(12),
+                  },
+                ]}
+              >
+                TAMBAH PLATFORM
+              </Text>
+            </Focusable>
+          </View>
+
+          {platformsLoading ? (
+            <Text
+              style={[
+                styles.status,
+                {
+                  color: palette.textMuted,
+                  fontFamily: fonts.body,
+                  fontSize: scaled(11),
+                },
+              ]}
+            >
+              Memuat platform...
+            </Text>
+          ) : null}
+
+          {platforms.map(platform => {
+            const editId = `settings:platform:${platform.id}:edit`;
+            const refreshId = `settings:platform:${platform.id}:refresh`;
+            const detail = `${platform.emulatorLabel} · ${platform.folderName} · ${platform.games.length} game`;
+            return (
+              <View
+                key={platform.id}
+                style={[
+                  styles.platformRow,
+                  {
+                    backgroundColor: withAlpha(palette.surface, 0.42),
+                    borderColor: palette.glassBorder,
+                  },
+                ]}
+              >
+                <View style={styles.platformInfo}>
+                  <Text
+                    style={[
+                      styles.platformName,
+                      {
+                        color: palette.textPrimary,
+                        fontFamily: fonts.bodyBold,
+                        fontSize: scaled(12),
+                      },
+                    ]}
+                  >
+                    {platform.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.platformStatus,
+                      {
+                        color: palette.textMuted,
+                        fontFamily: fonts.body,
+                        fontSize: scaled(10),
+                      },
+                    ]}
+                  >
+                    {detail}
+                  </Text>
+                </View>
+                <View style={styles.platformActions}>
+                  <Focusable
+                    id={editId}
+                    viewRef={setOptionRef(editId)}
+                    onFocus={() => revealOption(editId)}
+                    onPress={() => onPlatformSheetChange(platform)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit platform ${platform.name}`}
+                    hitSlop={6}
+                    style={({pressed}) => [
+                      styles.removeWallpaper,
+                      {borderColor: palette.glassBorder},
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Icon name="edit" size={scaled(16)} color={palette.primary} />
+                  </Focusable>
+                  <Focusable
+                    id={refreshId}
+                    viewRef={setOptionRef(refreshId)}
+                    onFocus={() => revealOption(refreshId)}
+                    onPress={() => refreshPlatform(platform)}
+                    disabled={refreshingPlatform === platform.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Refresh game platform ${platform.name}`}
+                    hitSlop={6}
+                    style={({pressed}) => [
+                      styles.removeWallpaper,
+                      {borderColor: palette.glassBorder},
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Icon name="reset" size={scaled(16)} color={palette.primary} />
+                  </Focusable>
+                </View>
+              </View>
+            );
+          })}
+
+          {!platformsLoading && platforms.length === 0 ? (
+            <Text
+              style={[
+                styles.status,
+                {
+                  color: palette.textMuted,
+                  fontFamily: fonts.body,
+                  fontSize: scaled(11),
+                },
+              ]}
+            >
+              Belum ada platform.
+            </Text>
+          ) : null}
+        </Section>
+
         <Section title="ROTASI LAYAR" icon="tune">
           <Text
             style={[
@@ -423,6 +633,14 @@ export function SettingsScreen({
           </Text>
         </Section>
       </ScrollView>
+
+      <PlatformSheet
+        visible={platformSheet !== undefined}
+        platform={platformSheet ?? null}
+        emulatorOptions={emulatorOptions}
+        onClose={() => onPlatformSheetChange(undefined)}
+        onSubmit={submitPlatform}
+      />
     </View>
   );
 }
@@ -732,10 +950,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  platformRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 10,
+  },
+  platformInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  platformName: {
+    letterSpacing: 0.6,
+  },
+  platformStatus: {
+    flexShrink: 1,
+  },
+  platformActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   removeWallpaper: {
     width: 34,
     height: 34,
     borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },

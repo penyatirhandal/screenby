@@ -37,7 +37,8 @@ interface GameEditSheetProps {
   game: PinnedGame | null;
   onClose: () => void;
   onSave: (patch: GameEditPatch) => Promise<void>;
-  onDelete: () => Promise<void>;
+  /** Omit for games that cannot be removed from the launcher. */
+  onDelete?: () => Promise<void>;
 }
 
 interface FormState {
@@ -145,6 +146,9 @@ export function GameEditSheet({
   };
 
   const handleDelete = () => {
+    if (!onDelete) {
+      return;
+    }
     Alert.alert(
       'Hapus dari Home?',
       'Game akan dikeluarkan dari Home. Aplikasi tetap terpasang di perangkat.',
@@ -314,31 +318,33 @@ export function GameEditSheet({
           </ScrollView>
 
           <View style={styles.actions}>
-            <Focusable
-              id="gameEdit:delete"
-              enabled={visible && game !== null}
-              layer={10}
-              style={({ pressed }) => [
-                styles.deleteButton,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={handleDelete}
-              accessibilityRole="button"
-              accessibilityLabel="Hapus game dari Home"
-            >
-              <Text
-                style={[
-                  styles.actionText,
-                  {
-                    color: palette.danger,
-                    fontFamily: fonts.bodySemiBold,
-                    fontSize: scaled(13),
-                  },
+            {onDelete ? (
+              <Focusable
+                id="gameEdit:delete"
+                enabled={visible && game !== null}
+                layer={10}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  pressed && styles.buttonPressed,
                 ]}
+                onPress={handleDelete}
+                accessibilityRole="button"
+                accessibilityLabel="Hapus game dari Home"
               >
-                Delete
-              </Text>
-            </Focusable>
+                <Text
+                  style={[
+                    styles.actionText,
+                    {
+                      color: palette.danger,
+                      fontFamily: fonts.bodySemiBold,
+                      fontSize: scaled(13),
+                    },
+                  ]}
+                >
+                  Delete
+                </Text>
+              </Focusable>
+            ) : null}
             <View style={styles.actionSpacer} />
             <Focusable
               id="gameEdit:cancel"

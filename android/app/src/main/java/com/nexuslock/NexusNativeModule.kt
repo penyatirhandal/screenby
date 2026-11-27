@@ -1,6 +1,7 @@
 package com.nexuslock
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.WallpaperManager
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
@@ -22,13 +23,17 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.telephony.TelephonyManager
 import android.util.Base64
 import androidx.core.content.ContextCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.exifinterface.media.ExifInterface
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
@@ -95,16 +100,60 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
+  private var gameFolderPromise: Promise? = null
+
+  private val gameFolderListener = object : BaseActivityEventListener() {
+    override fun onActivityResult(
+      activity: Activity,
+      requestCode: Int,
+      resultCode: Int,
+      data: Intent?,
+    ) {
+      if (requestCode != REQUEST_PICK_GAME_FOLDER) {
+        return
+      }
+      val promise = gameFolderPromise ?: return
+      gameFolderPromise = null
+
+      if (resultCode != Activity.RESULT_OK || data?.data == null) {
+        promise.reject("E_FOLDER_CANCELLED", "Pemilihan folder dibatalkan.")
+        return
+      }
+
+      try {
+        val uri = data.data!!
+        var flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        if (data.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0) {
+          flags = flags or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        }
+        reactContext.contentResolver.takePersistableUriPermission(uri, flags)
+        promise.resolve(
+          Arguments.createMap().apply {
+            putString("uri", uri.toString())
+            putString("name", treeDisplayName(uri))
+          }
+        )
+      } catch (e: Exception) {
+        promise.reject("E_FOLDER", e.message ?: "Folder tidak dapat disimpan.", e)
+      }
+    }
+  }
+
   override fun getName(): String = "NexusNative"
 
   override fun initialize() {
     super.initialize()
+    reactContext.addActivityEventListener(gameFolderListener)
     registerBatteryUpdates()
     registerNetworkUpdates()
     registerScreenUpdates()
   }
 
   override fun invalidate() {
+    reactContext.removeActivityEventListener(gameFolderListener)
+    gameFolderPromise?.reject("E_FOLDER", "Nexus dimuat ulang saat memilih folder.")
+    gameFolderPromise = null
+
     if (screenReceiverRegistered) {
       try {
         reactContext.unregisterReceiver(screenReceiver)
@@ -856,6 +905,135 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Game platforms: folder picker, ROM scan and emulator launch
+  // ---------------------------------------------------------------------------------------------
+
+  @ReactMethod
+  fun pickGameFolder(promise: Promise) {
+    val activity = reactContext.currentActivity
+    if (activity == null) {
+      promise.reject("E_NO_ACTIVITY", "Tidak dapat membuka pemilih folder.")
+      return
+    }
+    if (gameFolderPromise != null) {
+      promise.reject("E_FOLDER_BUSY", "Pemilih folder sedang dibuka.")
+      return
+    }
+
+    gameFolderPromise = promise
+    try {
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        flags =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+      }
+      activity.startActivityForResult(intent, REQUEST_PICK_GAME_FOLDER)
+    } catch (e: Exception) {
+      gameFolderPromise = null
+      promise.reject("E_FOLDER", e.message ?: "Pemilih folder tidak tersedia.", e)
+    }
+  }
+
+  @ReactMethod
+  fun scanGameFolder(
+      folderUriString: String,
+      extensions: ReadableArray,
+      promise: Promise
+  ) {
+    try {
+      val allowed =
+          (0 until extensions.size())
+              .map {
+                extensions.getString(it)?.lowercase(Locale.US)?.removePrefix(".") ?: ""
+              }
+              .filter { it.isNotBlank() }
+              .toSet()
+
+      val uri = Uri.parse(folderUriString)
+      val root = DocumentFile.fromTreeUri(reactContext, uri)
+      if (root == null || !root.canRead()) {
+        promise.reject("E_FOLDER", "Folder tidak dapat dibaca. Pilih ulang folder di Edit.")
+        return
+      }
+
+      val result = Arguments.createArray()
+      root.listFiles()
+          .mapNotNull { file ->
+            val name = file.name ?: return@mapNotNull null
+            if (!file.isFile) {
+              return@mapNotNull null
+            }
+            val extension =
+                name.substringAfterLast('.', "").lowercase(Locale.US).removePrefix(".")
+            if (extension.isBlank() || extension !in allowed) {
+              return@mapNotNull null
+            }
+            Triple(name.substringBeforeLast('.', name), file.uri.toString(), file)
+          }
+          .sortedBy { it.first.lowercase(Locale.US) }
+          .forEach { (label, documentUri, file) ->
+            result.pushMap(
+                Arguments.createMap().apply {
+                  putString("id", documentUri)
+                  putString("name", label)
+                  putString("uri", documentUri)
+                  putDouble("size", file.length().toDouble())
+                  putDouble("modifiedAt", file.lastModified().toDouble())
+                }
+            )
+          }
+      promise.resolve(result)
+    } catch (e: Exception) {
+      promise.reject("E_SCAN", e.message ?: "Game di folder tidak dapat dipindai.", e)
+    }
+  }
+
+  @ReactMethod
+  fun launchGameFile(fileUriString: String, emulatorPackage: String?, promise: Promise) {
+    try {
+      val intent =
+          Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(fileUriString), "application/octet-stream")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (!emulatorPackage.isNullOrBlank()) {
+              setPackage(emulatorPackage)
+            }
+          }
+
+      val activity = reactContext.currentActivity
+      if (activity != null) {
+        activity.startActivity(intent)
+      } else {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        reactContext.startActivity(intent)
+      }
+      promise.resolve(true)
+    } catch (e: ActivityNotFoundException) {
+      promise.reject(
+          "E_NO_EMULATOR",
+          "Emulator tidak tersedia. Pasang emulator atau pilih package lain di Settings.",
+          e
+      )
+    } catch (e: Exception) {
+      promise.reject("E_LAUNCH_GAME", e.message ?: "Game tidak dapat dibuka.", e)
+    }
+  }
+
+  private fun treeDisplayName(uri: Uri): String {
+    val documentId =
+        try {
+          DocumentsContract.getTreeDocumentId(uri)
+        } catch (_: Exception) {
+          null
+        }
+    val candidate =
+        documentId?.substringAfter(':')?.substringAfterLast('/')
+            ?: uri.lastPathSegment?.substringAfterLast(':')
+    return candidate?.takeIf { it.isNotBlank() } ?: "Folder game"
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Unlock / lifecycle helpers
   // ---------------------------------------------------------------------------------------------
 
@@ -953,6 +1131,7 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     private const val GAME_ICON_SIZE = 512
     private const val MUSIC_COVER_DIRECTORY = "music-cover"
     private const val MUSIC_COVER_SIZE = 512
+    private const val REQUEST_PICK_GAME_FOLDER = 4097
     private const val MAX_WALLPAPER_DIMENSION = 2560
   }
 }

@@ -73,22 +73,70 @@ export interface WallpaperColors {
   tertiary?: string | null;
 }
 
-/** A game pinned to the home screen. Metadata is always user supplied. */
-export interface PinnedGame {
-  packageName: string;
-  /** Label from Android, used as the default and as a fallback. */
-  label: string;
-  /** Native app icon data URI, refreshed from the OS on each load. */
-  icon?: string | null;
-  /** Overrides from the Edit form. */
+/** User supplied game metadata, shared by pinned apps and ROM entries. */
+export interface GameMetadata {
   customLabel?: string;
   customIconPath?: string;
   releaseYear?: string;
   genre?: string;
   developer?: string;
   publisher?: string;
-  pinnedAt: number;
   lastPlayedAt?: number;
+}
+
+/** A game pinned to the home screen. Metadata is always user supplied. */
+export interface PinnedGame extends GameMetadata {
+  packageName: string;
+  /** Label from Android, used as the default and as a fallback. */
+  label: string;
+  /** Native app icon data URI, refreshed from the OS on each load. */
+  icon?: string | null;
+  pinnedAt: number;
+}
+
+/** Folder chosen through the Android document tree picker. */
+export interface PickedFolder {
+  /** Persistable tree URI returned by the Android folder picker. */
+  uri: string;
+  /** Human readable folder name shown in the UI. */
+  name: string;
+}
+
+/** A ROM discovered inside a platform's game folder. */
+export interface PlatformGame extends GameMetadata {
+  /** Stable document URI, also used as the React key. */
+  id: string;
+  /** File name without its extension. */
+  name: string;
+  /** Content URI used to open the file with the emulator. */
+  uri: string;
+  size: number;
+  modifiedAt: number;
+}
+
+/** One emulator platform. Each platform gets its own Home tab. */
+export interface GamePlatform {
+  id: string;
+  name: string;
+  emulatorId: string;
+  emulatorLabel: string;
+  emulatorPackage: string | null;
+  extensions: string[];
+  folderUri: string;
+  folderName: string;
+  games: PlatformGame[];
+  scannedAt: number | null;
+}
+
+/** Form payload shared by the add and edit platform sheets. */
+export interface PlatformInput {
+  name: string;
+  emulatorId: string;
+  emulatorLabel: string;
+  emulatorPackage: string | null;
+  extensions: string[];
+  folderUri: string;
+  folderName: string;
 }
 
 export type FontChoice = 'hack' | 'inter' | 'arial';
@@ -160,4 +208,4 @@ export interface LauncherSettings {
   desktopItems: DesktopWidgetItem[];
 }
 
-export type HomeTab = 'desktop' | 'games';
+export type HomeTab = 'desktop' | 'games' | `platform:${string}`;

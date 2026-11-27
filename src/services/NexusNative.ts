@@ -4,6 +4,8 @@ import type {
   ImportedWallpaper,
   LauncherApp,
   NetworkState,
+  PickedFolder,
+  PlatformGame,
   WallpaperColors,
   WallpaperSlot,
 } from '../types';
@@ -23,6 +25,15 @@ interface NexusNativeInterface {
   getWallpaperColors(): Promise<WallpaperColors | null>;
   importGameIcon(uri: string): Promise<ImportedWallpaper>;
   saveMusicCover(uri: string): Promise<ImportedWallpaper>;
+  pickGameFolder(): Promise<PickedFolder>;
+  scanGameFolder(
+    folderUri: string,
+    extensions: string[],
+  ): Promise<PlatformGame[]>;
+  launchGameFile(
+    fileUri: string,
+    emulatorPackage: string | null,
+  ): Promise<boolean>;
   deleteFile(path: string): Promise<boolean>;
   uninstallApp(packageName: string): Promise<boolean>;
   setSystemWallpaper(path: string): Promise<boolean>;
@@ -127,6 +138,28 @@ export const NexusNative = {
 
   saveMusicCover(uri: string): Promise<ImportedWallpaper> {
     return nativeModule ? nativeModule.saveMusicCover(uri) : unavailable();
+  },
+
+  pickGameFolder(): Promise<PickedFolder> {
+    return nativeModule ? nativeModule.pickGameFolder() : unavailable();
+  },
+
+  scanGameFolder(
+    folderUri: string,
+    extensions: string[],
+  ): Promise<PlatformGame[]> {
+    return nativeModule
+      ? nativeModule.scanGameFolder(folderUri, extensions)
+      : Promise.resolve([]);
+  },
+
+  launchGameFile(
+    fileUri: string,
+    emulatorPackage: string | null,
+  ): Promise<boolean> {
+    return nativeModule
+      ? nativeModule.launchGameFile(fileUri, emulatorPackage)
+      : Promise.resolve(false);
   },
 
   deleteFile(path: string): Promise<boolean> {

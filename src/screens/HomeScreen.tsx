@@ -44,9 +44,11 @@ import type {
   BuiltinWidget,
   DesktopWidgetItem,
   GameIconSize,
+  GamePlatform,
   HomeTab,
   NetworkState,
   PinnedGame,
+  PlatformGame,
   Wallpaper,
   WidgetProvider,
 } from '../types';
@@ -55,6 +57,7 @@ import {computeCoverLayout} from '../utils/smartCrop';
 
 interface HomeScreenProps {
   games: PinnedGame[];
+  platforms: GamePlatform[];
   tab: HomeTab;
   onTabChange: (tab: HomeTab) => void;
   desktopItems: DesktopWidgetItem[];
@@ -66,7 +69,9 @@ interface HomeScreenProps {
   onOpenSettings: () => void;
   onLock: () => void;
   onPlay: (game: PinnedGame) => void;
+  onPlayPlatformGame: (platformId: string, game: PlatformGame) => void;
   onLongPressGame: (game: PinnedGame) => void;
+  onLongPressPlatformGame: (platformId: string, game: PlatformGame) => void;
   onAddBuiltinWidget: (
     widget: BuiltinWidget,
     layout: {x: number; y: number; width: number; height: number},
@@ -82,7 +87,7 @@ interface HomeScreenProps {
   onRemoveWidget: (id: string) => Promise<void>;
 }
 
-const TABS: {key: HomeTab; label: string}[] = [
+const BASE_TABS: {key: HomeTab; label: string}[] = [
   {key: 'desktop', label: 'DESKTOP'},
   {key: 'games', label: 'GAMES'},
 ];
@@ -141,6 +146,7 @@ function widgetLabel(item: DesktopWidgetItem): string {
 
 export function HomeScreen({
   games,
+  platforms,
   tab,
   onTabChange,
   desktopItems,
@@ -152,7 +158,9 @@ export function HomeScreen({
   onOpenSettings,
   onLock,
   onPlay,
+  onPlayPlatformGame,
   onLongPressGame,
+  onLongPressPlatformGame,
   onAddBuiltinWidget,
   onAddAppWidget,
   onUpdateWidget,
@@ -173,6 +181,25 @@ export function HomeScreen({
     () => [...games].sort((a, b) => b.pinnedAt - a.pinnedAt),
     [games],
   );
+
+  const tabs = useMemo(
+    () => [
+      ...BASE_TABS,
+      ...platforms.map(platform => ({
+        key: `platform:${platform.id}` as HomeTab,
+        label: platform.name.toUpperCase(),
+      })),
+    ],
+    [platforms],
+  );
+
+  const activePlatform = useMemo(() => {
+    if (!tab.startsWith('platform:')) {
+      return null;
+    }
+    const id = tab.slice('platform:'.length);
+    return platforms.find(platform => platform.id === id) ?? null;
+  }, [platforms, tab]);
 
   const wallpaperLayout = useMemo(() => {
     if (!wallpaper) {
@@ -242,7 +269,7 @@ export function HomeScreen({
           <View style={styles.controllers}>
             <ControllerKey label="L1" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>
-              {TABS.map(item => {
+              {tabs.map(item => {
                 const active = tab === item.key;
                 return (
                   <Focusable
@@ -348,7 +375,7 @@ export function HomeScreen({
             onUpdateWidget={onUpdateWidget}
             onRemoveWidget={onRemoveWidget}
           />
-        ) : visibleGames.length > 0 ? (
+        ) : tab === 'games' && visibleGames.length > 0 ? (
           <View
             style={styles.gamesArea}
             onLayout={event => {
@@ -430,6 +457,45 @@ export function HomeScreen({
                 </View>
               )}
             />
+          </View>
+        ) : activePlatform ? (
+          <PlatformGameGrid
+            platform={activePlatform}
+            areaSize={gameAreaSize}
+            iconSize={gameIconSize}
+            onLayoutArea={setGameAreaSize}
+            onPlay={game => onPlayPlatformGame(activePlatform.id, game)}
+            onLongPress={game =>
+              onLongPressPlatformGame(activePlatform.id, game)
+            }
+          />
+        ) : tab.startsWith('platform:') ? (
+          <View style={styles.empty}>
+            <Icon name="gamepad" size={scaled(46)} color={palette.primary} />
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: palette.textPrimary,
+                  fontFamily: fonts.displayBold,
+                  fontSize: scaled(20),
+                },
+              ]}
+            >
+              Platform tidak ditemukan
+            </Text>
+            <Text
+              style={[
+                styles.emptyHint,
+                {
+                  color: palette.textMuted,
+                  fontFamily: fonts.body,
+                  fontSize: scaled(12),
+                },
+              ]}
+            >
+              Tambahkan lagi platform melalui Settings.
+            </Text>
           </View>
         ) : (
           <View style={styles.empty}>
@@ -1288,6 +1354,170 @@ function Artwork({
       resizeMode="contain"
       accessibilityLabel={`Ikon ${displayName(game)}`}
     />
+  );
+}
+
+function PlatformGameGrid({
+  platform,
+  areaSize,
+  iconSize,
+  onLayoutArea,
+  onPlay,
+  onLongPress,
+}: {
+  platform: GamePlatform;
+  areaSize: {width: number; height: number};
+  iconSize: GameIconSize;
+  onLayoutArea: (size: {width: number; height: number}) => void;
+  onPlay: (game: PlatformGame) => void;
+  onLongPress: (game: PlatformGame) => void;
+}): React.JSX.Element {
+  const palette = useLauncherPalette();
+  const {fonts, scaled} = useTypography();
+  const {width} = useWindowDimensions();
+
+  const items = useMemo(
+    () =>
+      platform.games.map(game => ({
+        key: game.id,
+        name: game.customLabel || game.name,
+        game,
+      })),
+    [platform.games],
+  );
+  const {cardSize, rows} = gameGridFor(
+    iconSize,
+    areaSize.width || width,
+    areaSize.height,
+  );
+  const columns = useMemo(
+    () => chunkGames(items, rows),
+    [items, rows],
+  );
+  const step = cardSize + GAME_GAP;
+  const sidePadding =
+    columns.length <= 1
+      ? Math.max(12, ((areaSize.width || width) - cardSize) / 2)
+      : 12;
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Icon name="gamepad" size={scaled(46)} color={palette.primary} />
+        <Text
+          style={[
+            styles.emptyTitle,
+            {
+              color: palette.textPrimary,
+              fontFamily: fonts.displayBold,
+              fontSize: scaled(20),
+            },
+          ]}
+        >
+          Belum ada game
+        </Text>
+        <Text
+          style={[
+            styles.emptyHint,
+            {
+              color: palette.textMuted,
+              fontFamily: fonts.body,
+              fontSize: scaled(12),
+            },
+          ]}
+        >
+          {'Buka Settings > Platform, lalu tekan Refresh Game untuk memindai '}
+          folder {platform.folderName}.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={styles.gamesArea}
+      onLayout={event => {
+        const {width: nextWidth, height: nextHeight} = event.nativeEvent.layout;
+        onLayoutArea({width: nextWidth, height: nextHeight});
+      }}
+    >
+      <FlatList
+        horizontal
+        data={columns}
+        keyExtractor={(_item, index) => `column-${index}`}
+        showsHorizontalScrollIndicator={false}
+        style={styles.gameRow}
+        contentContainerStyle={[
+          styles.gameRowContent,
+          {paddingHorizontal: sidePadding},
+        ]}
+        snapToInterval={step}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        getItemLayout={(_data, index) => ({
+          length: step,
+          offset: step * index,
+          index,
+        })}
+        renderItem={({item: column}) => (
+          <View style={styles.gameColumn}>
+            {column.map(item => (
+              <Focusable
+                key={item.key}
+                id={`platformGame:${platform.id}:${item.key}`}
+                onPress={() => onPlay(item.game)}
+                onLongPress={() => onLongPress(item.game)}
+                accessibilityRole="button"
+                accessibilityLabel={`Mainkan ${item.name}`}
+                ringRadius={18}
+                style={({pressed}) => [
+                  styles.gameCard,
+                  {
+                    width: cardSize,
+                    height: cardSize,
+                    borderColor: palette.glassBorder,
+                    backgroundColor: withAlpha(palette.surface, 0.82),
+                  },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Artwork
+                  game={{
+                    packageName: item.key,
+                    label: item.name,
+                    customIconPath: item.game.customIconPath,
+                    pinnedAt: item.game.modifiedAt,
+                  }}
+                  letterSize={scaled(cardSize * 0.34)}
+                />
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[
+                    withAlpha(palette.background, 0),
+                    withAlpha(palette.background, 0.94),
+                  ]}
+                  locations={[0.42, 1]}
+                  style={styles.gameCardFade}
+                />
+                <Text
+                  style={[
+                    styles.gameCardLabel,
+                    {
+                      color: palette.textPrimary,
+                      fontFamily: fonts.bodyBold,
+                      fontSize: scaled(clamp(cardSize * 0.085, 11, 18)),
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {item.name}
+                </Text>
+              </Focusable>
+            ))}
+          </View>
+        )}
+      />
+    </View>
   );
 }
 
