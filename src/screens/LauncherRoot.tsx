@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, BackHandler, Platform, StyleSheet } from 'react-native';
 import { ActionMenu, type MenuOption } from '../components/ActionMenu';
+import { AppsLoadingOverlay } from '../components/AppsLoadingOverlay';
 import { GameEditSheet, type GameEditPatch } from '../components/GameEditSheet';
 import { GameInfoDialog } from '../components/GameInfoDialog';
 import { ScreenTransition } from '../components/ScreenTransition';
@@ -14,11 +15,13 @@ import {
   NexusNative,
   subscribeToScreenEvents,
 } from '../services/NexusNative';
+import { NexusRotation } from '../services/NexusRotation';
 import type { LauncherThemeController } from '../hooks/useLauncherTheme';
 import type {
   HomeTab,
   LauncherApp,
   PinnedGame,
+  RotationLockMode,
   WallpaperSlot,
 } from '../types';
 import { AppsScreen } from './AppsScreen';
@@ -27,6 +30,9 @@ import { LockScreen } from './LockScreen';
 import { SettingsScreen } from './SettingsScreen';
 
 type Screen = 'home' | 'apps' | 'settings' | 'lock';
+
+const APPS_LOADING_MIN_MS = 450;
+const APPS_LOADING_FALLBACK_MS = 2500;
 
 interface LauncherRootProps {
   theme: LauncherThemeController;
@@ -44,6 +50,10 @@ export function LauncherRoot({
   const [infoGame, setInfoGame] = useState<PinnedGame | null>(null);
   const [wallpaperSheetSlot, setWallpaperSheetSlot] =
     useState<WallpaperSlot | null>(null);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const appsOpenedAt = useRef(0);
+  const appsMinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appsNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
   const media = useNowPlaying();
@@ -56,6 +66,123 @@ export function LauncherRoot({
     setHomeTab('desktop');
     setScreen('lock');
   }, []);
+
+  const openApps = useCallback(() => {
+    if (appsMinTimer.current) {
+      clearTimeout(appsMinTimer.current);
+      appsMinTimer.current = null;
+    }
+    if (appsNavTimer.current) {
+      clearTimeout(appsNavTimer.current);
+    }
+    appsOpenedAt.current = Date.now();
+    setWallpaperSheetSlot(null);
+    // Paint the overlay first so the screen swap never reveals a blank frame.
+    setAppsLoading(true);
+    appsNavTimer.current = setTimeout(() => {
+      appsNavTimer.current = null;
+      setScreen('apps');
+    }, 16);
+  }, []);
+
+  const handleAppsLoaded = useCallback(() => {
+    if (appsMinTimer.current) {
+      return;
+    }
+    const remaining = Math.max(
+      0,
+      APPS_LOADING_MIN_MS - (Date.now() - appsOpenedAt.current),
+    );
+    appsMinTimer.current = setTimeout(() => {
+      appsMinTimer.current = null;
+      setAppsLoading(false);
+    }, remaining);
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'apps') {
+      setAppsLoading(false);
+    }
+  }, [screen]);
+
+  useEffect(() => {
+    if (!appsLoading) {
+      return;
+    }
+    const timer = setTimeout(
+      () => setAppsLoading(false),
+      APPS_LOADING_FALLBACK_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [appsLoading]);
+
+  useEffect(
+    () => () => {
+      if (appsMinTimer.current) {
+        clearTimeout(appsMinTimer.current);
+      }
+      if (appsNavTimer.current) {
+        clearTimeout(appsNavTimer.current);
+      }
+    },
+    [],
+  );
+
+  const rotationInitialized = useRef(false);
+
+  useEffect(() => {
+    if (!settings.loaded || rotationInitialized.current) {
+      return;
+    }
+    rotationInitialized.current = true;
+    NexusRotation.setRotationLock(settings.settings.rotationLock)
+      .then(applied => {
+        if (!applied) {
+          Alert.alert(
+            'Rotasi tidak diterapkan',
+            'Aktifkan izin Modify system settings untuk Nexus, lalu pilih mode rotasi lagi.',
+          );
+        }
+      })
+      .catch(() => {
+        // The stored setting remains in AsyncStorage for the next launch.
+      });
+  }, [settings.loaded, settings.settings.rotationLock]);
+
+  const changeRotationLock = useCallback(
+    async (mode: RotationLockMode) => {
+      if (mode !== 'off') {
+        const allowed = await NexusRotation.canWriteSettings();
+        if (!allowed) {
+          Alert.alert(
+            'Izin diperlukan',
+            'Nexus perlu izin Modify system settings untuk mengunci rotasi semua aplikasi. Aktifkan izin itu, lalu pilih mode lagi.',
+            [
+              { text: 'Batal', style: 'cancel' },
+              {
+                text: 'Buka Pengaturan',
+                onPress: () => NexusRotation.openWriteSettings(),
+              },
+            ],
+          );
+          return;
+        }
+      }
+
+      const applied = await NexusRotation.setRotationLock(mode);
+      if (!applied) {
+        Alert.alert(
+          'Gagal',
+          mode === 'off'
+            ? 'Rotasi sistem tidak dapat dikembalikan. Periksa izin Modify system settings.'
+            : 'Rotasi tidak dapat dikunci. Periksa izin Modify system settings.',
+        );
+        return;
+      }
+      await settings.setRotationLock(mode);
+    },
+    [settings],
+  );
 
   useEffect(() => {
     // The OS screen turning on/off drives the in-app Nexus lock screen.
@@ -189,12 +316,11 @@ export function LauncherRoot({
       },
       onSelect: () => {
         if (screen !== 'lock') {
-          setWallpaperSheetSlot(null);
-          setScreen('apps');
+          openApps();
         }
       },
     }),
-    [handleBack, screen],
+    [handleBack, openApps, screen],
   );
 
   const dynamicColorAvailable =
@@ -244,10 +370,7 @@ export function LauncherRoot({
             gameIconSize={settings.settings.gameIconSize}
             wallpaper={wallpaper.wallpapers.home}
             media={media}
-            onOpenApps={() => {
-              setWallpaperSheetSlot(null);
-              setScreen('apps');
-            }}
+            onOpenApps={openApps}
             onOpenSettings={() => {
               setWallpaperSheetSlot(null);
               setScreen('settings');
@@ -294,6 +417,7 @@ export function LauncherRoot({
             onPin={pin}
             onUnpin={library.unpin}
             onLaunched={library.recordPlay}
+            onLoaded={handleAppsLoaded}
           />
         </ScreenTransition>
       ) : null}
@@ -310,6 +434,7 @@ export function LauncherRoot({
             onSetFont={settings.setFont}
             onSetFontSize={settings.setFontSize}
             onSetGameIconSize={settings.setGameIconSize}
+            onSetRotationLock={changeRotationLock}
             wallpapers={wallpaper.wallpapers}
             onOpenWallpaper={slot => setWallpaperSheetSlot(slot)}
             onRemoveWallpaper={slot => wallpaper.remove(slot)}
@@ -372,6 +497,8 @@ export function LauncherRoot({
         options={menuOptions}
         onClose={() => setMenuGame(null)}
       />
+
+      <AppsLoadingOverlay visible={appsLoading} />
     </GamepadProvider>
   );
 }

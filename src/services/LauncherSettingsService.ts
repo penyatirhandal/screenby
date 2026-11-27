@@ -8,6 +8,7 @@ import type {
   FontSizeChoice,
   GameIconSize,
   LauncherSettings,
+  RotationLockMode,
   WidgetProvider,
 } from '../types';
 
@@ -32,6 +33,11 @@ const DEFAULT_DESKTOP_WIDGETS: BuiltinWidget[] = [
 const FONTS: FontChoice[] = ['hack', 'inter', 'arial'];
 const SIZES: FontSizeChoice[] = ['small', 'normal', 'large', 'xlarge'];
 const GAME_ICON_SIZES: GameIconSize[] = ['small', 'normal', 'large'];
+const ROTATION_MODES: RotationLockMode[] = [
+  'off',
+  'landscape',
+  'reverseLandscape',
+];
 
 const DEFAULT_LAYOUT: Record<BuiltinWidget, DesktopWidgetLayout> = {
   clock: {x: 0.05, y: 0.1, width: 0.33, height: 0.68},
@@ -248,6 +254,12 @@ function sanitizeGameIconSize(value: unknown): GameIconSize {
     : DEFAULT_SETTINGS.gameIconSize;
 }
 
+function sanitizeRotationLock(value: unknown): RotationLockMode {
+  return ROTATION_MODES.includes(value as RotationLockMode)
+    ? (value as RotationLockMode)
+    : DEFAULT_SETTINGS.rotationLock;
+}
+
 function legacyWidgetsFromItems(items: DesktopWidgetItem[]): BuiltinWidget[] {
   const present = new Set(
     items
@@ -265,6 +277,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
         font: DEFAULT_SETTINGS.font,
         fontSize: DEFAULT_SETTINGS.fontSize,
         gameIconSize: DEFAULT_SETTINGS.gameIconSize,
+        rotationLock: DEFAULT_SETTINGS.rotationLock,
         desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
         desktopItems: defaultDesktopItems(),
       };
@@ -291,6 +304,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
         ? (candidate.fontSize as FontSizeChoice)
         : DEFAULT_SETTINGS.fontSize,
       gameIconSize: sanitizeGameIconSize(candidate.gameIconSize),
+      rotationLock: sanitizeRotationLock(candidate.rotationLock),
       desktopWidgets: hasItems
         ? legacyWidgetsFromItems(desktopItems)
         : sanitizeLegacyWidgets(candidate.desktopWidgets),
@@ -301,6 +315,7 @@ export async function loadSettings(): Promise<LauncherSettings> {
       font: DEFAULT_SETTINGS.font,
       fontSize: DEFAULT_SETTINGS.fontSize,
       gameIconSize: DEFAULT_SETTINGS.gameIconSize,
+      rotationLock: DEFAULT_SETTINGS.rotationLock,
       desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
       desktopItems: defaultDesktopItems(),
     };
@@ -314,6 +329,7 @@ export async function saveSettings(
     font: settings.font,
     fontSize: settings.fontSize,
     gameIconSize: settings.gameIconSize,
+    rotationLock: sanitizeRotationLock(settings.rotationLock),
     desktopWidgets: legacyWidgetsFromItems(settings.desktopItems),
     desktopItems: settings.desktopItems,
   };
@@ -324,6 +340,7 @@ export const DEFAULT_SETTINGS: LauncherSettings = {
   font: 'inter',
   fontSize: 'normal',
   gameIconSize: 'large',
+  rotationLock: 'off',
   desktopWidgets: [...DEFAULT_DESKTOP_WIDGETS],
   desktopItems: defaultDesktopItems(),
 };

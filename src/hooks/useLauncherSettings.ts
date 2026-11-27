@@ -16,13 +16,17 @@ import type {
   FontSizeChoice,
   GameIconSize,
   LauncherSettings,
+  RotationLockMode,
 } from '../types';
 
 export interface LauncherSettingsController {
   settings: LauncherSettings;
+  /** False until AsyncStorage has been read; prevents applying default values too early. */
+  loaded: boolean;
   setFont: (font: FontChoice) => Promise<void>;
   setFontSize: (fontSize: FontSizeChoice) => Promise<void>;
   setGameIconSize: (size: GameIconSize) => Promise<void>;
+  setRotationLock: (mode: RotationLockMode) => Promise<void>;
   setDesktopItems: (items: DesktopWidgetItem[]) => Promise<void>;
   addBuiltinWidget: (
     widget: BuiltinWidget,
@@ -44,6 +48,7 @@ export function useLauncherSettings(): LauncherSettingsController {
     ...DEFAULT_SETTINGS,
     desktopItems: [...DEFAULT_SETTINGS.desktopItems],
   });
+  const [loaded, setLoaded] = useState(false);
   const settingsRef = useRef(settings);
 
   useEffect(() => {
@@ -58,9 +63,11 @@ export function useLauncherSettings(): LauncherSettingsController {
           settingsRef.current = next;
           setSettings(next);
         }
+        setLoaded(true);
       })
       .catch(() => {
         // Corrupted settings fall back to the defaults in memory.
+        setLoaded(true);
       });
     return () => {
       active = false;
@@ -133,9 +140,11 @@ export function useLauncherSettings(): LauncherSettingsController {
 
   return {
     settings,
+    loaded,
     setFont: (font: FontChoice) => update({font}),
     setFontSize: (fontSize: FontSizeChoice) => update({fontSize}),
     setGameIconSize: (gameIconSize: GameIconSize) => update({gameIconSize}),
+    setRotationLock: (rotationLock: RotationLockMode) => update({rotationLock}),
     setDesktopItems,
     addBuiltinWidget,
     addAppWidget,

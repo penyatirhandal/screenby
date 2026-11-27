@@ -88,6 +88,25 @@ test('game icon size defaults to large and survives save/load', async () => {
   expect((await loadSettings()).gameIconSize).toBe('normal');
 });
 
+test('rotation lock defaults to off and survives save/load', async () => {
+  const defaults = await loadSettings();
+  expect(defaults.rotationLock).toBe('off');
+
+  await saveSettings({...defaults, rotationLock: 'reverseLandscape'});
+  expect((await loadSettings()).rotationLock).toBe('reverseLandscape');
+
+  await saveSettings({...defaults, rotationLock: 'landscape'});
+  expect((await loadSettings()).rotationLock).toBe('landscape');
+});
+
+test('invalid rotation lock falls back to off', async () => {
+  await AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({rotationLock: 'portrait', desktopItems: []}),
+  );
+  expect((await loadSettings()).rotationLock).toBe('off');
+});
+
 test('invalid game icon size falls back to large', async () => {
   await AsyncStorage.setItem(
     STORAGE_KEY,

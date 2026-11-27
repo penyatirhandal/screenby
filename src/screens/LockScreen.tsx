@@ -502,34 +502,38 @@ export function LockScreen({
 
           <View
             style={[
-              styles.batteryCard,
-              compact && styles.batteryCardCompact,
+              styles.clockCard,
+              compact && styles.clockCardCompact,
               {
                 backgroundColor: withAlpha(palette.background, 0.52),
                 borderColor: palette.glassBorder,
               },
             ]}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={`Pukul ${clock.time}`}
           >
             <Icon
-              name={batteryIcon(level, battery?.charging ?? false)}
-              size={scaled(compact ? 24 : 30)}
+              name="schedule"
+              size={scaled(compact ? 22 : 26)}
               color={palette.tertiary}
             />
             <Text
+              allowFontScaling={false}
               style={[
-                styles.batteryValue,
+                styles.clockValue,
                 {
                   color: palette.textPrimary,
                   fontFamily: fonts.displayBold,
-                  fontSize: scaled(compact ? 26 : 34),
+                  fontSize: scaled(compact ? 38 : 52),
                 },
               ]}
             >
-              {level >= 0 ? `${level}%` : '--%'}
+              {clock.time}
             </Text>
             <Text
               style={[
-                styles.batteryLabel,
+                styles.clockLabel,
                 {
                   color: palette.textMuted,
                   fontFamily: fonts.body,
@@ -537,7 +541,7 @@ export function LockScreen({
                 },
               ]}
             >
-              {battery?.charging ? 'Mengisi daya' : 'Sisa daya'}
+              JAM
             </Text>
           </View>
         </ScreenTransition>
@@ -771,7 +775,7 @@ const styles = StyleSheet.create({
   grantText: {
     letterSpacing: 0.9,
   },
-  batteryCard: {
+  clockCard: {
     width: 200,
     minHeight: 150,
     borderRadius: 18,
@@ -780,15 +784,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  batteryCardCompact: {
+  clockCardCompact: {
     width: 150,
     minHeight: 110,
   },
-  batteryValue: {
+  clockValue: {
     fontVariant: ['tabular-nums'],
+    letterSpacing: -1.5,
   },
-  batteryLabel: {
-    letterSpacing: 0.5,
+  clockLabel: {
+    letterSpacing: 1.2,
   },
   bottomRow: {
     flexDirection: 'row',

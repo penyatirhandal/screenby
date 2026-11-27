@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -29,6 +29,8 @@ interface AppsScreenProps {
   onPin: (app: LauncherApp) => Promise<void>;
   onUnpin: (packageName: string) => Promise<void>;
   onLaunched: (packageName: string) => Promise<void>;
+  /** Notifies the root overlay that the app grid is ready to be shown. */
+  onLoaded?: () => void;
 }
 
 export function AppsScreen({
@@ -39,6 +41,7 @@ export function AppsScreen({
   onPin,
   onUnpin,
   onLaunched,
+  onLoaded,
 }: AppsScreenProps): React.JSX.Element | null {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
@@ -49,6 +52,12 @@ export function AppsScreen({
   const [menuApp, setMenuApp] = useState<LauncherApp | null>(null);
   const searchRef = React.useRef<TextInputInstance>(null);
   const listRef = React.useRef<FlatListInstance>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      onLoaded?.();
+    }
+  }, [loading, onLoaded]);
 
   const pinnedPackages = useMemo(
     () => new Set(pinned.map(game => game.packageName)),

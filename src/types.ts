@@ -148,10 +148,14 @@ export interface AddedWidget {
   label: string;
 }
 
+export type RotationLockMode = 'off' | 'landscape' | 'reverseLandscape';
+
 export interface LauncherSettings {
   font: FontChoice;
   fontSize: FontSizeChoice;
   gameIconSize: GameIconSize;
+  /** System-wide rotation lock; 'off' restores the user's original settings. */
+  rotationLock: RotationLockMode;
   /** Kept for migration from older settings. */
   desktopWidgets: BuiltinWidget[];
   desktopItems: DesktopWidgetItem[];

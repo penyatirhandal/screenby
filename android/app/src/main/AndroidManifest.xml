@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.READ_BASIC_PHONE_STATE" />
     <!-- Normal permission used when the user applies a picked image as the system wallpaper. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Lock rotation for all apps: on API 23+ the user must also grant Modify system settings. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
     <!-- The app can run on devices without a camera or a flash unit. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

@@ -25,6 +25,7 @@ import type {
   FontSizeChoice,
   GameIconSize,
   LauncherSettings,
+  RotationLockMode,
   Wallpaper,
   WallpaperSet,
   WallpaperSlot,
@@ -39,6 +40,18 @@ const GAME_ICON_SIZE_OPTIONS: Record<
   large: {label: 'Besar', detail: '1 baris · ukuran saat ini'},
 };
 
+const ROTATION_OPTIONS: Record<
+  RotationLockMode,
+  {label: string; detail: string}
+> = {
+  off: {label: 'Mati', detail: 'Rotasi mengikuti pengaturan Android'},
+  landscape: {label: 'Landscape', detail: 'Semua aplikasi terkunci landscape'},
+  reverseLandscape: {
+    label: 'Landscape terbalik',
+    detail: 'Semua aplikasi terkunci landscape terbalik',
+  },
+};
+
 interface SettingsScreenProps {
   visible: boolean;
   onClose: () => void;
@@ -46,6 +59,7 @@ interface SettingsScreenProps {
   onSetFont: (font: FontChoice) => Promise<void>;
   onSetFontSize: (size: FontSizeChoice) => Promise<void>;
   onSetGameIconSize: (size: GameIconSize) => Promise<void>;
+  onSetRotationLock: (mode: RotationLockMode) => Promise<void>;
   wallpapers: WallpaperSet;
   onOpenWallpaper: (slot: WallpaperSlot) => void;
   onRemoveWallpaper: (slot: WallpaperSlot) => Promise<void>;
@@ -59,6 +73,7 @@ export function SettingsScreen({
   onSetFont,
   onSetFontSize,
   onSetGameIconSize,
+  onSetRotationLock,
   wallpapers,
   onOpenWallpaper,
   onRemoveWallpaper,
@@ -329,6 +344,35 @@ export function SettingsScreen({
               onPress={() => onSetGameIconSize(size)}
               viewRef={setOptionRef(`settings:gameIconSize:${size}`)}
               onFocus={() => revealOption(`settings:gameIconSize:${size}`)}
+            />
+          ))}
+        </Section>
+
+        <Section title="ROTASI LAYAR" icon="tune">
+          <Text
+            style={[
+              styles.description,
+              {
+                color: palette.textSecondary,
+                fontFamily: fonts.body,
+                fontSize: scaled(13),
+              },
+            ]}
+          >
+            Kunci orientasi seluruh aplikasi ke landscape atau landscape
+            terbalik. Android akan meminta izin Modify system settings saat
+            fitur diaktifkan, dan mengembalikan rotasi semula saat dimatikan.
+          </Text>
+          {(Object.keys(ROTATION_OPTIONS) as RotationLockMode[]).map(mode => (
+            <OptionRow
+              key={mode}
+              id={`settings:rotation:${mode}`}
+              label={ROTATION_OPTIONS[mode].label}
+              detail={ROTATION_OPTIONS[mode].detail}
+              selected={settings.rotationLock === mode}
+              onPress={() => onSetRotationLock(mode)}
+              viewRef={setOptionRef(`settings:rotation:${mode}`)}
+              onFocus={() => revealOption(`settings:rotation:${mode}`)}
             />
           ))}
         </Section>
