@@ -61,6 +61,7 @@ interface HomeScreenProps {
   media: NowPlayingController;
   onOpenApps: () => void;
   onOpenSettings: () => void;
+  onLock: () => void;
   onPlay: (game: PinnedGame) => void;
   onLongPressGame: (game: PinnedGame) => void;
   onAddBuiltinWidget: (
@@ -145,6 +146,7 @@ export function HomeScreen({
   media,
   onOpenApps,
   onOpenSettings,
+  onLock,
   onPlay,
   onLongPressGame,
   onAddBuiltinWidget,
@@ -299,6 +301,27 @@ export function HomeScreen({
             >
               {clock.time}
             </Text>
+            <Focusable
+              id="home:lock"
+              onPress={onLock}
+              ringRadius={16}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Tampilkan Lock Screen"
+              style={({pressed}: {pressed: boolean}) => [
+                styles.lockButton,
+                {
+                  backgroundColor: withAlpha(
+                    palette.primary,
+                    pressed ? 0.28 : 0.14,
+                  ),
+                  borderColor: palette.glassBorder,
+                },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Icon name="lock" size={scaled(16)} color={palette.primary} />
+            </Focusable>
           </View>
         </View>
 
@@ -1389,6 +1412,14 @@ const styles = StyleSheet.create({
     minWidth: 58,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
+  },
+  lockButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   canvas: {
     flex: 1,

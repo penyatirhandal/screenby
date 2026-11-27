@@ -375,6 +375,7 @@ export function LauncherRoot({
               setWallpaperSheetSlot(null);
               setScreen('settings');
             }}
+            onLock={showLock}
             onPlay={game => play(game)}
             onLongPressGame={setMenuGame}
             onAddBuiltinWidget={settings.addBuiltinWidget}
