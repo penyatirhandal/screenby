@@ -22,6 +22,8 @@ jobs:
       NEXUS_KEYSTORE_PASSWORD: ${{ secrets.NEXUS_KEYSTORE_PASSWORD }}
       NEXUS_KEY_ALIAS: ${{ secrets.NEXUS_KEY_ALIAS }}
       NEXUS_KEY_PASSWORD: ${{ secrets.NEXUS_KEY_PASSWORD }}
+      # Only point Gradle at a release keystore when all signing secrets exist.
+      NEXUS_KEYSTORE_FILE: ${{ secrets.NEXUS_KEYSTORE_BASE64 != '' && secrets.NEXUS_KEYSTORE_PASSWORD != '' && secrets.NEXUS_KEY_ALIAS != '' && secrets.NEXUS_KEY_PASSWORD != '' && 'nexus-release.keystore' || '' }}
 
     steps:
       - name: Checkout
@@ -78,23 +80,18 @@ jobs:
         run: |
           echo "$NEXUS_KEYSTORE_BASE64" | base64 --decode > android/app/nexus-release.keystore
 
-      - name: Build signed release APK
-        if: ${{ env.NEXUS_KEYSTORE_BASE64 != '' && env.NEXUS_KEYSTORE_PASSWORD != '' && env.NEXUS_KEY_ALIAS != '' && env.NEXUS_KEY_PASSWORD != '' }}
+      - name: Build release APK
         working-directory: android
-        env:
-          NEXUS_KEYSTORE_FILE: nexus-release.keystore
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload release APK
-        if: ${{ env.NEXUS_KEYSTORE_BASE64 != '' && env.NEXUS_KEYSTORE_PASSWORD != '' && env.NEXUS_KEY_ALIAS != '' && env.NEXUS_KEY_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: nexus-lock-screen-release
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
 
-      - name: Prepare signed release asset
-        if: ${{ env.NEXUS_KEYSTORE_BASE64 != '' && env.NEXUS_KEYSTORE_PASSWORD != '' && env.NEXUS_KEY_ALIAS != '' && env.NEXUS_KEY_PASSWORD != '' }}
+      - name: Prepare release asset
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk release-assets/NexusLockScreen-release.apk
 
@@ -103,13 +100,16 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest-debug
-          name: Nexus Lock Screen - Latest Debug
+          name: Nexus Lock Screen - Latest Build
           body: |
-            APK debug otomatis dari commit `${{ github.sha }}`.
+            APK otomatis dari commit `${{ github.sha }}`.
 
             - Build: GitHub Actions run `${{ github.run_id }}`
-            - Debug: `NexusLockScreen-debug.apk`
-            - Release signed tersedia jika keempat secrets keystore sudah diisi.
+            - `NexusLockScreen-release.apk`: APK release standalone, disarankan untuk dipasang.
+            - `NexusLockScreen-debug.apk`: APK debug, memerlukan Metro (`adb reverse tcp:8081 tcp:8081`).
+
+            Release ditandatangani dengan keystore rilis jika keempat secrets keystore tersedia;
+            jika tidak, build memakai debug keystore.
           prerelease: true
           target_commitish: ${{ github.sha }}
           overwrite_files: true
