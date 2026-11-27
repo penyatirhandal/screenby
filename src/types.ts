@@ -107,7 +107,6 @@ export interface NowPlayingState {
   title: string | null;
   artist: string | null;
   album: string | null;
-  albumArtPath: string | null;
   packageName: string | null;
 }
 

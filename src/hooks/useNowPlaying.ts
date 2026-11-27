@@ -16,7 +16,6 @@ const EMPTY_STATE: NowPlayingState = {
   title: null,
   artist: null,
   album: null,
-  albumArtPath: null,
   packageName: null,
 };
 

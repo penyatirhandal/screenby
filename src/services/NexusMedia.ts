@@ -35,7 +35,6 @@ export const NexusMedia = {
           title: null,
           artist: null,
           album: null,
-          albumArtPath: null,
           packageName: null,
         });
   },
@@ -59,7 +58,7 @@ export const NexusMedia = {
   },
 };
 
-/** Emits whenever the track, artwork or playback state changes. */
+/** Emits whenever the track or playback state changes. */
 export function subscribeToMedia(listener: (state: NowPlayingState) => void): () => void {
   const subscription = getEmitter()?.addListener('NexusMedia', (...args) => {
     listener(args[0] as unknown as NowPlayingState);

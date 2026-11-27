@@ -705,8 +705,8 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  /** Centre-crops a gallery image to a square PNG in app-private storage. */
-  private fun importGameIconInternal(uriString: String): WritableMap {
+  /** Centre-crops a gallery image to a square bitmap of the requested size. */
+  private fun decodeSquareBitmap(uriString: String, targetSize: Int): Bitmap {
     val uri = Uri.parse(uriString)
     val resolver = reactContext.contentResolver
 
@@ -717,7 +717,7 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     }
 
     var sampleSize = 1
-    while (max(bounds.outWidth, bounds.outHeight) / sampleSize > GAME_ICON_SIZE * 2) {
+    while (max(bounds.outWidth, bounds.outHeight) / sampleSize > targetSize * 2) {
       sampleSize *= 2
     }
 
@@ -756,11 +756,16 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
       bitmap.recycle()
     }
 
-    val icon = Bitmap.createScaledBitmap(square, GAME_ICON_SIZE, GAME_ICON_SIZE, true)
-    if (icon !== square) {
+    val scaled = Bitmap.createScaledBitmap(square, targetSize, targetSize, true)
+    if (scaled !== square) {
       square.recycle()
     }
+    return scaled
+  }
 
+  /** Centre-crops a gallery image to a square PNG in app-private storage. */
+  private fun importGameIconInternal(uriString: String): WritableMap {
+    val icon = decodeSquareBitmap(uriString, GAME_ICON_SIZE)
     val directory = File(reactContext.filesDir, GAME_ICON_DIRECTORY).apply { mkdirs() }
     val file = File(directory, "game-${System.currentTimeMillis()}.png")
     FileOutputStream(file).use { output ->
@@ -774,6 +779,36 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
       putString("path", file.absolutePath)
       putInt("width", GAME_ICON_SIZE)
       putInt("height", GAME_ICON_SIZE)
+    }
+  }
+
+  @ReactMethod
+  fun saveMusicCover(uriString: String, promise: Promise) {
+    try {
+      promise.resolve(importMusicCoverInternal(uriString))
+    } catch (e: OutOfMemoryError) {
+      promise.reject("E_COVER_MEMORY", "Gambar terlalu besar untuk diproses.", e)
+    } catch (e: Exception) {
+      promise.reject("E_COVER", e.message ?: "Gagal menyimpan cover musik.", e)
+    }
+  }
+
+  /** One persistent square cover for the lock screen and the Home music widget. */
+  private fun importMusicCoverInternal(uriString: String): WritableMap {
+    val cover = decodeSquareBitmap(uriString, MUSIC_COVER_SIZE)
+    val directory = File(reactContext.filesDir, MUSIC_COVER_DIRECTORY).apply { mkdirs() }
+    val file = File(directory, "music-cover.jpg")
+    FileOutputStream(file).use { output ->
+      if (!cover.compress(Bitmap.CompressFormat.JPEG, 90, output)) {
+        throw IOException("Gagal mengompres cover.")
+      }
+    }
+    cover.recycle()
+
+    return Arguments.createMap().apply {
+      putString("path", file.absolutePath)
+      putInt("width", MUSIC_COVER_SIZE)
+      putInt("height", MUSIC_COVER_SIZE)
     }
   }
 
@@ -916,6 +951,8 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     private const val WALLPAPER_DIRECTORY = "wallpapers"
     private const val GAME_ICON_DIRECTORY = "game-icons"
     private const val GAME_ICON_SIZE = 512
+    private const val MUSIC_COVER_DIRECTORY = "music-cover"
+    private const val MUSIC_COVER_SIZE = 512
     private const val MAX_WALLPAPER_DIMENSION = 2560
   }
 }

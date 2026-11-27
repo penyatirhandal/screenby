@@ -22,6 +22,7 @@ interface NexusNativeInterface {
   launchApp(packageName: string): Promise<boolean>;
   getWallpaperColors(): Promise<WallpaperColors | null>;
   importGameIcon(uri: string): Promise<ImportedWallpaper>;
+  saveMusicCover(uri: string): Promise<ImportedWallpaper>;
   deleteFile(path: string): Promise<boolean>;
   uninstallApp(packageName: string): Promise<boolean>;
   setSystemWallpaper(path: string): Promise<boolean>;
@@ -122,6 +123,10 @@ export const NexusNative = {
 
   importGameIcon(uri: string): Promise<ImportedWallpaper> {
     return nativeModule ? nativeModule.importGameIcon(uri) : unavailable();
+  },
+
+  saveMusicCover(uri: string): Promise<ImportedWallpaper> {
+    return nativeModule ? nativeModule.saveMusicCover(uri) : unavailable();
   },
 
   deleteFile(path: string): Promise<boolean> {

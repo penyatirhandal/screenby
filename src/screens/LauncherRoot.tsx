@@ -9,6 +9,7 @@ import { WallpaperSheet } from '../components/WallpaperSheet';
 import { GamepadProvider } from '../gamepad/GamepadProvider';
 import { useGameLibrary } from '../hooks/useGameLibrary';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
+import { useMusicCover } from '../hooks/useMusicCover';
 import { useNowPlaying } from '../hooks/useNowPlaying';
 import { useWallpaper } from '../hooks/useWallpaper';
 import {
@@ -57,6 +58,7 @@ export function LauncherRoot({
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
   const media = useNowPlaying();
+  const cover = useMusicCover();
 
   const showLock = useCallback(() => {
     setMenuGame(null);
@@ -370,6 +372,7 @@ export function LauncherRoot({
             gameIconSize={settings.settings.gameIconSize}
             wallpaper={wallpaper.wallpapers.home}
             media={media}
+            cover={cover}
             onOpenApps={openApps}
             onOpenSettings={() => {
               setWallpaperSheetSlot(null);
@@ -396,6 +399,7 @@ export function LauncherRoot({
           <LockScreen
             wallpaper={wallpaper.wallpapers.lock}
             media={media}
+            cover={cover}
             onUnlock={unlock}
             onOpenWallpaper={() => setWallpaperSheetSlot('lock')}
           />

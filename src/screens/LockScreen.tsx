@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Image,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -14,6 +7,7 @@ import {
   Icon,
   type IconName,
 } from '../components/Icon';
+import { MusicCover } from '../components/MusicCover';
 import { MusicEqualizer } from '../components/MusicEqualizer';
 import { ScreenTransition } from '../components/ScreenTransition';
 import { SwipeUpUnlock } from '../components/SwipeUpUnlock';
@@ -21,11 +15,9 @@ import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
 import { Focusable } from '../gamepad/GamepadProvider';
 import { useBattery } from '../hooks/useBattery';
 import { useClock } from '../hooks/useClock';
-import { useFlashlight } from '../hooks/useFlashlight';
+import type { MusicCoverController } from '../hooks/useMusicCover';
 import { useNetwork } from '../hooks/useNetwork';
 import type { NowPlayingController } from '../hooks/useNowPlaying';
-import { NexusNative } from '../services/NexusNative';
-import { wallpaperUri } from '../services/WallpaperService';
 import { withAlpha } from '../theme/colorUtils';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { useTypography } from '../theme/TypographyContext';
@@ -35,6 +27,7 @@ import { computeCoverLayout } from '../utils/smartCrop';
 interface LockScreenProps {
   wallpaper: Wallpaper | null;
   media: NowPlayingController;
+  cover: MusicCoverController;
   onUnlock: () => void;
   onOpenWallpaper: () => void;
 }
@@ -68,6 +61,7 @@ function presentNetwork(network: NetworkState | null): {
 export function LockScreen({
   wallpaper,
   media,
+  cover,
   onUnlock,
   onOpenWallpaper,
 }: LockScreenProps): React.JSX.Element {
@@ -78,7 +72,6 @@ export function LockScreen({
   const clock = useClock();
   const battery = useBattery();
   const network = useNetwork();
-  const flashlight = useFlashlight();
 
   const [imageFailed, setImageFailed] = useState(false);
   const compact = height < 400;
@@ -105,57 +98,15 @@ export function LockScreen({
     setImageFailed(false);
   }, [wallpaper?.path]);
 
-  const handleFlashlight = useCallback(async () => {
-    if (flashlight.available === false) {
-      Alert.alert(
-        'Senter tidak tersedia',
-        'Perangkat ini tidak memiliki lampu kilat.',
-      );
-      return;
-    }
-    try {
-      await flashlight.toggle();
-    } catch {
-      Alert.alert('Senter tidak dapat digunakan', 'Silakan coba lagi.');
-    }
-  }, [flashlight]);
-
-  const handleCamera = useCallback(async () => {
-    try {
-      await NexusNative.openCamera();
-    } catch {
-      Alert.alert('Kamera tidak tersedia', 'Silakan coba lagi.');
-    }
-  }, []);
-
   const connection = presentNetwork(network);
   const level = battery?.level ?? -1;
 
-  const artwork = track.albumArtPath ? (
-    <Image
-      source={{ uri: wallpaperUri(track.albumArtPath) }}
-      style={[styles.albumArt, { width: artSize, height: artSize }]}
-      accessibilityLabel="Sampul album"
-    />
-  ) : (
-    <View
-      style={[
-        styles.albumArt,
-        styles.albumFallback,
-        {
-          width: artSize,
-          height: artSize,
-          backgroundColor: withAlpha(palette.primary, 0.18),
-          borderColor: palette.primaryBorder,
-        },
-      ]}
-    >
-      <Icon
-        name="musicNote"
-        size={scaled(artSize * 0.45)}
-        color={palette.primary}
-      />
-    </View>
+  const handlePickCover = useCallback(
+    (event: {stopPropagation: () => void}) => {
+      event.stopPropagation();
+      cover.pick().catch(() => undefined);
+    },
+    [cover],
   );
 
   return (
@@ -253,6 +204,7 @@ export function LockScreen({
             <Text
               style={[
                 styles.date,
+                styles.readableText,
                 {
                   color: palette.primary,
                   fontFamily: fonts.bodySemiBold,
@@ -264,15 +216,25 @@ export function LockScreen({
               {clock.date}
             </Text>
 
-            <View
+            <Text
+              allowFontScaling={false}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`Pukul ${clock.time}`}
               style={[
-                styles.musicCard,
+                styles.clockTime,
+                styles.readableText,
                 {
-                  backgroundColor: withAlpha(palette.background, 0.52),
-                  borderColor: palette.glassBorder,
+                  color: palette.primary,
+                  fontFamily: fonts.bodySemiBold,
+                  fontSize: scaled(compact ? 12 : 14),
                 },
               ]}
             >
+              {clock.time}
+            </Text>
+
+            <View style={styles.musicCard}>
               {!media.accessGranted ? (
                 <View style={styles.musicEmpty}>
                   <Icon
@@ -283,6 +245,7 @@ export function LockScreen({
                   <Text
                     style={[
                       styles.musicEmptyTitle,
+                      styles.readableText,
                       {
                         color: palette.textPrimary,
                         fontFamily: fonts.bodyBold,
@@ -295,6 +258,7 @@ export function LockScreen({
                   <Text
                     style={[
                       styles.musicEmptyHint,
+                      styles.readableText,
                       {
                         color: palette.textMuted,
                         fontFamily: fonts.body,
@@ -339,6 +303,7 @@ export function LockScreen({
                   <Text
                     style={[
                       styles.musicEmptyTitle,
+                      styles.readableText,
                       {
                         color: palette.textPrimary,
                         fontFamily: fonts.bodyBold,
@@ -351,6 +316,7 @@ export function LockScreen({
                   <Text
                     style={[
                       styles.musicEmptyHint,
+                      styles.readableText,
                       {
                         color: palette.textMuted,
                         fontFamily: fonts.body,
@@ -367,6 +333,7 @@ export function LockScreen({
                     <Text
                       style={[
                         styles.musicEyebrow,
+                        styles.readableText,
                         {
                           color: palette.textMuted,
                           fontFamily: fonts.bodyBold,
@@ -384,12 +351,19 @@ export function LockScreen({
                   </View>
 
                   <View style={styles.musicBody}>
-                    {artwork}
+                    <MusicCover
+                      path={cover.path}
+                      playing={track.playing}
+                      size={artSize}
+                      color={palette.primary}
+                      onLongPress={handlePickCover}
+                    />
                     <View style={styles.musicMeta}>
                       <Text
                         numberOfLines={1}
                         style={[
                           styles.musicTitle,
+                          styles.readableText,
                           {
                             color: palette.textPrimary,
                             fontFamily: fonts.displayBold,
@@ -403,6 +377,7 @@ export function LockScreen({
                         numberOfLines={1}
                         style={[
                           styles.musicArtist,
+                          styles.readableText,
                           {
                             color: palette.textSecondary,
                             fontFamily: fonts.bodyMedium,
@@ -417,6 +392,7 @@ export function LockScreen({
                           numberOfLines={1}
                           style={[
                             styles.musicAlbum,
+                            styles.readableText,
                             {
                               color: palette.textMuted,
                               fontFamily: fonts.body,
@@ -499,51 +475,6 @@ export function LockScreen({
               )}
             </View>
           </View>
-
-          <View
-            style={[
-              styles.clockCard,
-              compact && styles.clockCardCompact,
-              {
-                backgroundColor: withAlpha(palette.background, 0.52),
-                borderColor: palette.glassBorder,
-              },
-            ]}
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={`Pukul ${clock.time}`}
-          >
-            <Icon
-              name="schedule"
-              size={scaled(compact ? 22 : 26)}
-              color={palette.tertiary}
-            />
-            <Text
-              allowFontScaling={false}
-              style={[
-                styles.clockValue,
-                {
-                  color: palette.textPrimary,
-                  fontFamily: fonts.displayBold,
-                  fontSize: scaled(compact ? 38 : 52),
-                },
-              ]}
-            >
-              {clock.time}
-            </Text>
-            <Text
-              style={[
-                styles.clockLabel,
-                {
-                  color: palette.textMuted,
-                  fontFamily: fonts.body,
-                  fontSize: scaled(11),
-                },
-              ]}
-            >
-              JAM
-            </Text>
-          </View>
         </ScreenTransition>
 
         <ScreenTransition
@@ -552,40 +483,6 @@ export function LockScreen({
           delay={140}
           duration={340}
         >
-          <View style={styles.shortcutSlot}>
-            <Focusable
-              id="lock:flashlight"
-              onPress={handleFlashlight}
-              accessibilityRole="button"
-              accessibilityLabel={
-                flashlight.enabled ? 'Matikan senter' : 'Nyalakan senter'
-              }
-              style={({ pressed }) => [
-                styles.shortcut,
-                { backgroundColor: palette.glass, borderColor: palette.glassBorder },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Icon
-                name={flashlight.enabled ? 'flashlightOn' : 'flashlightOff'}
-                size={scaled(20)}
-                color={flashlight.enabled ? palette.tertiary : palette.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.shortcutLabel,
-                  {
-                    color: palette.textSecondary,
-                    fontFamily: fonts.body,
-                    fontSize: scaled(10),
-                  },
-                ]}
-              >
-                Senter
-              </Text>
-            </Focusable>
-          </View>
-
           <View style={styles.swipeSlot}>
             <Focusable
               id="lock:unlock"
@@ -600,38 +497,6 @@ export function LockScreen({
                 icon="lock"
                 accessibilityLabel="Buka launcher"
               />
-            </Focusable>
-          </View>
-
-          <View style={[styles.shortcutSlot, styles.shortcutEnd]}>
-            <Focusable
-              id="lock:camera"
-              onPress={handleCamera}
-              accessibilityRole="button"
-              accessibilityLabel="Buka kamera"
-              style={({ pressed }) => [
-                styles.shortcut,
-                { backgroundColor: palette.glass, borderColor: palette.glassBorder },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Icon
-                name="camera"
-                size={scaled(20)}
-                color={palette.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.shortcutLabel,
-                  {
-                    color: palette.textSecondary,
-                    fontFamily: fonts.body,
-                    fontSize: scaled(10),
-                  },
-                ]}
-              >
-                Kamera
-              </Text>
             </Focusable>
           </View>
         </ScreenTransition>
@@ -676,27 +541,33 @@ const styles = StyleSheet.create({
   },
   mainRow: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 20,
+    alignItems: 'stretch',
+    justifyContent: 'center',
     paddingVertical: 6,
   },
   musicColumn: {
-    flex: 1,
+    width: '100%',
     minWidth: 0,
     maxWidth: 780,
-    gap: 8,
+    gap: 2,
   },
   date: {
     letterSpacing: 0.6,
   },
+  clockTime: {
+    letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'],
+  },
+  readableText: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 6,
+  },
   musicCard: {
     flexShrink: 1,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
     gap: 12,
   },
   musicHeader: {
@@ -711,14 +582,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-  },
-  albumArt: {
-    borderRadius: 14,
-  },
-  albumFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
   },
   musicMeta: {
     flexShrink: 1,
@@ -775,50 +638,11 @@ const styles = StyleSheet.create({
   grantText: {
     letterSpacing: 0.9,
   },
-  clockCard: {
-    width: 200,
-    minHeight: 150,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  clockCardCompact: {
-    width: 150,
-    minHeight: 110,
-  },
-  clockValue: {
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -1.5,
-  },
-  clockLabel: {
-    letterSpacing: 1.2,
-  },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
-    gap: 12,
-  },
-  shortcutSlot: {
-    width: 82,
-    alignItems: 'flex-start',
-  },
-  shortcutEnd: {
-    alignItems: 'flex-end',
-  },
-  shortcut: {
-    width: 72,
-    height: 54,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-  },
-  shortcutLabel: {
-    textAlign: 'center',
+    minHeight: 64,
   },
   swipeSlot: {
     flex: 1,

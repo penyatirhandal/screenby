@@ -3,7 +3,6 @@ package com.nexuslock
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
-import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSession
@@ -12,8 +11,6 @@ import android.os.Build
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import java.io.File
-import java.io.FileOutputStream
 
 /**
  * Reads the active media session from media notifications and exposes it to the
@@ -23,8 +20,6 @@ class NexusMediaListenerService : NotificationListenerService() {
 
   private var controller: MediaController? = null
   private var currentNotification: StatusBarNotification? = null
-  private var artKey: String? = null
-  private var artPath: String? = null
 
   private val callback =
       object : MediaController.Callback() {
@@ -127,8 +122,6 @@ class NexusMediaListenerService : NotificationListenerService() {
             ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()
     val album = metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM)
-    val artworkKey = listOf(title, artist, album).joinToString("|")
-    val artwork = if (active != null) resolveArtwork(metadata, artworkKey) else null
 
     NexusMediaState.publish(
         MediaSnapshot(
@@ -137,38 +130,9 @@ class NexusMediaListenerService : NotificationListenerService() {
             title = title,
             artist = artist,
             album = album,
-            albumArtPath = artwork,
             packageName = currentNotification?.packageName,
         )
     )
-  }
-
-  private fun resolveArtwork(metadata: MediaMetadata?, key: String): String? {
-    if (key == artKey) {
-      return artPath
-    }
-    artKey = key
-    val bitmap =
-        try {
-          metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-              ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-        } catch (_: Exception) {
-          null
-        }
-    if (bitmap == null) {
-      artPath = null
-      return null
-    }
-    val file = File(filesDir, "now-playing-art.jpg")
-    return try {
-      FileOutputStream(file).use { stream ->
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 82, stream)
-      }
-      file.absolutePath.also { artPath = it }
-    } catch (_: Exception) {
-      artPath = null
-      null
-    }
   }
 
   companion object {

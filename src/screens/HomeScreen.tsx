@@ -22,12 +22,14 @@ import {
   Icon,
   type IconName,
 } from '../components/Icon';
+import { MusicCover } from '../components/MusicCover';
 import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
 import { ScreenTransition } from '../components/ScreenTransition';
 import { WidgetPickerSheet } from '../components/WidgetPickerSheet';
 import { Focusable } from '../gamepad/GamepadProvider';
 import { useBattery } from '../hooks/useBattery';
 import { useClock, type ClockInfo } from '../hooks/useClock';
+import type { MusicCoverController } from '../hooks/useMusicCover';
 import { useNetwork } from '../hooks/useNetwork';
 import type { NowPlayingController } from '../hooks/useNowPlaying';
 import AppWidgetView from '../native/AppWidgetViewNativeComponent';
@@ -59,6 +61,7 @@ interface HomeScreenProps {
   gameIconSize: GameIconSize;
   wallpaper: Wallpaper | null;
   media: NowPlayingController;
+  cover: MusicCoverController;
   onOpenApps: () => void;
   onOpenSettings: () => void;
   onLock: () => void;
@@ -144,6 +147,7 @@ export function HomeScreen({
   gameIconSize,
   wallpaper,
   media,
+  cover,
   onOpenApps,
   onOpenSettings,
   onLock,
@@ -338,6 +342,7 @@ export function HomeScreen({
             battery={battery}
             network={network}
             media={media}
+            cover={cover}
             onAddBuiltinWidget={onAddBuiltinWidget}
             onAddAppWidget={onAddAppWidget}
             onUpdateWidget={onUpdateWidget}
@@ -502,6 +507,7 @@ interface DesktopCanvasProps {
   battery: BatteryState | null;
   network: NetworkState | null;
   media: NowPlayingController;
+  cover: MusicCoverController;
   onAddBuiltinWidget: HomeScreenProps['onAddBuiltinWidget'];
   onAddAppWidget: HomeScreenProps['onAddAppWidget'];
   onUpdateWidget: HomeScreenProps['onUpdateWidget'];
@@ -528,6 +534,7 @@ function DesktopCanvas({
   battery,
   network,
   media,
+  cover,
   onAddBuiltinWidget,
   onAddAppWidget,
   onUpdateWidget,
@@ -778,6 +785,9 @@ function DesktopCanvas({
             );
           }
 
+          const transparentMusic =
+            item.widget === 'music' && !active;
+
           return (
             <Focusable
               key={item.id}
@@ -793,8 +803,10 @@ function DesktopCanvas({
               style={({pressed}) => [
                 styles.widgetFrame,
                 positionStyle,
-                borderStyle,
-                {backgroundColor: withAlpha(palette.background, 0.52)},
+                transparentMusic ? styles.transparentWidget : borderStyle,
+                !transparentMusic && {
+                  backgroundColor: withAlpha(palette.background, 0.52),
+                },
                 pressed && styles.pressed,
               ]}
             >
@@ -804,6 +816,7 @@ function DesktopCanvas({
                 battery={battery}
                 network={network}
                 media={media}
+                cover={cover}
                 widthPx={pixelWidth}
                 heightPx={pixelHeight}
               />
@@ -884,6 +897,7 @@ function BuiltinWidgetCard({
   battery,
   network,
   media,
+  cover,
   widthPx,
   heightPx,
 }: {
@@ -894,11 +908,16 @@ function BuiltinWidgetCard({
   widthPx: number;
   heightPx: number;
   media: NowPlayingController;
+  cover: MusicCoverController;
 }): React.JSX.Element {
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
   const connection = presentNetwork(network);
   const level = battery?.level ?? -1;
+  const handlePickCover = (event: {stopPropagation: () => void}) => {
+    event.stopPropagation();
+    cover.pick().catch(() => undefined);
+  };
 
   if (widget === 'music') {
     const artSize = clamp(Math.min(heightPx * 0.42, widthPx * 0.2), 22, 56);
@@ -919,6 +938,7 @@ function BuiltinWidgetCard({
             numberOfLines={1}
             style={[
               styles.musicHint,
+              styles.readableText,
               {
                 color: palette.textSecondary,
                 fontFamily: fonts.body,
@@ -968,6 +988,7 @@ function BuiltinWidgetCard({
             numberOfLines={1}
             style={[
               styles.musicHint,
+              styles.readableText,
               {
                 color: palette.textSecondary,
                 fontFamily: fonts.body,
@@ -981,41 +1002,22 @@ function BuiltinWidgetCard({
       );
     }
 
-    const artwork = track.albumArtPath ? (
-      <Image
-        source={{uri: wallpaperUri(track.albumArtPath)}}
-        style={[styles.musicArt, {width: artSize, height: artSize}]}
-        accessibilityLabel="Sampul album"
-      />
-    ) : (
-      <View
-        style={[
-          styles.musicArt,
-          styles.musicArtFallback,
-          {
-            width: artSize,
-            height: artSize,
-            backgroundColor: withAlpha(palette.primary, 0.18),
-          },
-        ]}
-      >
-        <Icon
-          name="musicNote"
-          size={scaled(artSize * 0.55)}
-          color={palette.primary}
-        />
-      </View>
-    );
-
     return (
       <View style={[styles.builtinCard, styles.musicCard]}>
         <View style={styles.musicTop}>
-          {artwork}
+          <MusicCover
+            path={cover.path}
+            playing={track.playing}
+            size={artSize}
+            color={palette.primary}
+            onLongPress={handlePickCover}
+          />
           <View style={styles.musicInfo}>
             <Text
               numberOfLines={1}
               style={[
                 styles.musicTitle,
+                styles.readableText,
                 {
                   color: palette.textPrimary,
                   fontFamily: fonts.bodyBold,
@@ -1029,6 +1031,7 @@ function BuiltinWidgetCard({
               numberOfLines={1}
               style={[
                 styles.musicArtist,
+                styles.readableText,
                 {
                   color: palette.textMuted,
                   fontFamily: fonts.body,
@@ -1442,6 +1445,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
+  transparentWidget: {
+    borderWidth: 0,
+  },
+  readableText: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 6,
+  },
   nativeWidget: {
     flex: 1,
   },
@@ -1476,15 +1487,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  musicArt: {
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  musicArtFallback: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
   musicInfo: {
     flexShrink: 1,

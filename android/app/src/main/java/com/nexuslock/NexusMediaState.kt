@@ -11,7 +11,6 @@ data class MediaSnapshot(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
-    val albumArtPath: String? = null,
     val packageName: String? = null,
 ) {
   fun toMap(): WritableMap =
@@ -21,7 +20,6 @@ data class MediaSnapshot(
         putString("title", title)
         putString("artist", artist)
         putString("album", album)
-        putString("albumArtPath", albumArtPath)
         putString("packageName", packageName)
       }
 }
