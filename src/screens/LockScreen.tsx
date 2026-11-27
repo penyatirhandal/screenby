@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -13,6 +14,8 @@ import {
   Icon,
   type IconName,
 } from '../components/Icon';
+import { MusicEqualizer } from '../components/MusicEqualizer';
+import { ScreenTransition } from '../components/ScreenTransition';
 import { SwipeUpUnlock } from '../components/SwipeUpUnlock';
 import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
 import { Focusable } from '../gamepad/GamepadProvider';
@@ -20,7 +23,9 @@ import { useBattery } from '../hooks/useBattery';
 import { useClock } from '../hooks/useClock';
 import { useFlashlight } from '../hooks/useFlashlight';
 import { useNetwork } from '../hooks/useNetwork';
+import type { NowPlayingController } from '../hooks/useNowPlaying';
 import { NexusNative } from '../services/NexusNative';
+import { wallpaperUri } from '../services/WallpaperService';
 import { withAlpha } from '../theme/colorUtils';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { useTypography } from '../theme/TypographyContext';
@@ -29,8 +34,9 @@ import { computeCoverLayout } from '../utils/smartCrop';
 
 interface LockScreenProps {
   wallpaper: Wallpaper | null;
+  media: NowPlayingController;
   onUnlock: () => void;
-  onOpenSettings: () => void;
+  onOpenWallpaper: () => void;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -61,8 +67,9 @@ function presentNetwork(network: NetworkState | null): {
 
 export function LockScreen({
   wallpaper,
+  media,
   onUnlock,
-  onOpenSettings,
+  onOpenWallpaper,
 }: LockScreenProps): React.JSX.Element {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
@@ -75,7 +82,11 @@ export function LockScreen({
 
   const [imageFailed, setImageFailed] = useState(false);
   const compact = height < 400;
-  const clockSize = clamp(height * 0.24, 62, 150);
+  const artSize = clamp(Math.min(height * 0.16, width * 0.09), 54, 104);
+  const titleSize = clamp(height * 0.032, 15, 24);
+  const metaSize = clamp(height * 0.022, 11, 15);
+  const controlSize = clamp(height * 0.036, 18, 28);
+  const track = media.state;
 
   const wallpaperLayout = useMemo(() => {
     if (!wallpaper) {
@@ -119,6 +130,33 @@ export function LockScreen({
 
   const connection = presentNetwork(network);
   const level = battery?.level ?? -1;
+
+  const artwork = track.albumArtPath ? (
+    <Image
+      source={{ uri: wallpaperUri(track.albumArtPath) }}
+      style={[styles.albumArt, { width: artSize, height: artSize }]}
+      accessibilityLabel="Sampul album"
+    />
+  ) : (
+    <View
+      style={[
+        styles.albumArt,
+        styles.albumFallback,
+        {
+          width: artSize,
+          height: artSize,
+          backgroundColor: withAlpha(palette.primary, 0.18),
+          borderColor: palette.primaryBorder,
+        },
+      ]}
+    >
+      <Icon
+        name="musicNote"
+        size={scaled(artSize * 0.45)}
+        color={palette.primary}
+      />
+    </View>
+  );
 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]}>
@@ -191,9 +229,9 @@ export function LockScreen({
           </View>
           <Focusable
             id="lock:settings"
-            onPress={onOpenSettings}
+            onPress={onOpenWallpaper}
             accessibilityRole="button"
-            accessibilityLabel="Atur wallpaper"
+            accessibilityLabel="Ganti wallpaper Lock Screen"
             hitSlop={8}
             style={({ pressed }) => [
               styles.iconButton,
@@ -205,8 +243,13 @@ export function LockScreen({
           </Focusable>
         </View>
 
-        <View style={styles.mainRow}>
-          <View style={styles.clockColumn}>
+        <ScreenTransition
+          style={styles.mainRow}
+          from="bottom"
+          delay={60}
+          duration={340}
+        >
+          <View style={styles.musicColumn}>
             <Text
               style={[
                 styles.date,
@@ -220,39 +263,247 @@ export function LockScreen({
             >
               {clock.date}
             </Text>
-            <Text
-              allowFontScaling={false}
-              numberOfLines={1}
+
+            <View
               style={[
-                styles.time,
+                styles.musicCard,
                 {
-                  color: palette.textPrimary,
-                  fontFamily: fonts.displayBold,
-                  fontSize: scaled(clockSize),
-                  lineHeight: scaled(clockSize) * 1.02,
-                },
-              ]}
-              accessibilityLabel={`Pukul ${clock.time}`}
-            >
-              {clock.time}
-            </Text>
-            <Text
-              style={[
-                styles.timezone,
-                {
-                  color: palette.textMuted,
-                  fontFamily: fonts.body,
-                  fontSize: scaled(11),
+                  backgroundColor: withAlpha(palette.background, 0.52),
+                  borderColor: palette.glassBorder,
                 },
               ]}
             >
-              {clock.timezone}
-            </Text>
+              {!media.accessGranted ? (
+                <View style={styles.musicEmpty}>
+                  <Icon
+                    name="musicNote"
+                    size={scaled(compact ? 24 : 32)}
+                    color={palette.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.musicEmptyTitle,
+                      {
+                        color: palette.textPrimary,
+                        fontFamily: fonts.bodyBold,
+                        fontSize: scaled(compact ? 13 : 16),
+                      },
+                    ]}
+                  >
+                    Musik membutuhkan izin notifikasi
+                  </Text>
+                  <Text
+                    style={[
+                      styles.musicEmptyHint,
+                      {
+                        color: palette.textMuted,
+                        fontFamily: fonts.body,
+                        fontSize: scaled(compact ? 10 : 12),
+                      },
+                    ]}
+                  >
+                    Izinkan akses agar launcher dapat membaca lagu yang diputar.
+                  </Text>
+                  <Focusable
+                    id="lock:music:grant"
+                    onPress={media.openAccessSettings}
+                    accessibilityRole="button"
+                    accessibilityLabel="Izinkan akses notifikasi"
+                    style={({ pressed }) => [
+                      styles.grantButton,
+                      { borderColor: palette.primary },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.grantText,
+                        {
+                          color: palette.primary,
+                          fontFamily: fonts.bodyBold,
+                          fontSize: scaled(11),
+                        },
+                      ]}
+                    >
+                      IZINKAN
+                    </Text>
+                  </Focusable>
+                </View>
+              ) : !track.hasSession ? (
+                <View style={styles.musicEmpty}>
+                  <Icon
+                    name="musicNote"
+                    size={scaled(compact ? 24 : 32)}
+                    color={palette.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.musicEmptyTitle,
+                      {
+                        color: palette.textPrimary,
+                        fontFamily: fonts.bodyBold,
+                        fontSize: scaled(compact ? 13 : 16),
+                      },
+                    ]}
+                  >
+                    Tidak ada lagu diputar
+                  </Text>
+                  <Text
+                    style={[
+                      styles.musicEmptyHint,
+                      {
+                        color: palette.textMuted,
+                        fontFamily: fonts.body,
+                        fontSize: scaled(compact ? 10 : 12),
+                      },
+                    ]}
+                  >
+                    Putar musik dari aplikasi lain untuk mengontrolnya di sini.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.musicHeader}>
+                    <Text
+                      style={[
+                        styles.musicEyebrow,
+                        {
+                          color: palette.textMuted,
+                          fontFamily: fonts.bodyBold,
+                          fontSize: scaled(9),
+                        },
+                      ]}
+                    >
+                      SEDANG DIPUTAR
+                    </Text>
+                    <MusicEqualizer
+                      playing={track.playing}
+                      color={palette.primary}
+                      height={compact ? 12 : 16}
+                    />
+                  </View>
+
+                  <View style={styles.musicBody}>
+                    {artwork}
+                    <View style={styles.musicMeta}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.musicTitle,
+                          {
+                            color: palette.textPrimary,
+                            fontFamily: fonts.displayBold,
+                            fontSize: scaled(titleSize),
+                          },
+                        ]}
+                      >
+                        {track.title || 'Lagu tanpa judul'}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.musicArtist,
+                          {
+                            color: palette.textSecondary,
+                            fontFamily: fonts.bodyMedium,
+                            fontSize: scaled(metaSize),
+                          },
+                        ]}
+                      >
+                        {track.artist || track.album || 'Artis tidak diketahui'}
+                      </Text>
+                      {track.album && track.artist ? (
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.musicAlbum,
+                            {
+                              color: palette.textMuted,
+                              fontFamily: fonts.body,
+                              fontSize: scaled(metaSize * 0.86),
+                            },
+                          ]}
+                        >
+                          {track.album}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <View style={styles.musicControls}>
+                    <Focusable
+                      id="lock:music:previous"
+                      onPress={() => media.control('previous')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Lagu sebelumnya"
+                      hitSlop={6}
+                      ringRadius={20}
+                      style={({ pressed }) => [
+                        styles.musicControl,
+                        { borderColor: palette.glassBorder },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Icon
+                        name="skipPrevious"
+                        size={scaled(controlSize)}
+                        color={palette.textSecondary}
+                      />
+                    </Focusable>
+                    <Focusable
+                      id="lock:music:playPause"
+                      onPress={() => media.control('playPause')}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        track.playing ? 'Jeda musik' : 'Putar musik'
+                      }
+                      hitSlop={6}
+                      ringRadius={24}
+                      style={({ pressed }) => [
+                        styles.musicControl,
+                        styles.musicPlayControl,
+                        {
+                          borderColor: palette.primaryBorder,
+                          backgroundColor: withAlpha(palette.primary, 0.18),
+                        },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Icon
+                        name={track.playing ? 'pause' : 'play'}
+                        size={scaled(controlSize * 1.05)}
+                        color={palette.primary}
+                      />
+                    </Focusable>
+                    <Focusable
+                      id="lock:music:next"
+                      onPress={() => media.control('next')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Lagu berikutnya"
+                      hitSlop={6}
+                      ringRadius={20}
+                      style={({ pressed }) => [
+                        styles.musicControl,
+                        { borderColor: palette.glassBorder },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Icon
+                        name="skipNext"
+                        size={scaled(controlSize)}
+                        color={palette.textSecondary}
+                      />
+                    </Focusable>
+                  </View>
+                </>
+              )}
+            </View>
           </View>
 
           <View
             style={[
               styles.batteryCard,
+              compact && styles.batteryCardCompact,
               {
                 backgroundColor: withAlpha(palette.background, 0.52),
                 borderColor: palette.glassBorder,
@@ -261,7 +512,7 @@ export function LockScreen({
           >
             <Icon
               name={batteryIcon(level, battery?.charging ?? false)}
-              size={scaled(30)}
+              size={scaled(compact ? 24 : 30)}
               color={palette.tertiary}
             />
             <Text
@@ -270,7 +521,7 @@ export function LockScreen({
                 {
                   color: palette.textPrimary,
                   fontFamily: fonts.displayBold,
-                  fontSize: scaled(34),
+                  fontSize: scaled(compact ? 26 : 34),
                 },
               ]}
             >
@@ -289,9 +540,14 @@ export function LockScreen({
               {battery?.charging ? 'Mengisi daya' : 'Sisa daya'}
             </Text>
           </View>
-        </View>
+        </ScreenTransition>
 
-        <View style={styles.bottomRow}>
+        <ScreenTransition
+          style={styles.bottomRow}
+          from="bottom"
+          delay={140}
+          duration={340}
+        >
           <View style={styles.shortcutSlot}>
             <Focusable
               id="lock:flashlight"
@@ -374,7 +630,7 @@ export function LockScreen({
               </Text>
             </Focusable>
           </View>
-        </View>
+        </ScreenTransition>
       </View>
     </View>
   );
@@ -422,28 +678,111 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingVertical: 6,
   },
-  clockColumn: {
-    flexShrink: 1,
-    gap: 2,
+  musicColumn: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 780,
+    gap: 8,
   },
   date: {
     letterSpacing: 0.6,
   },
-  time: {
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -3,
+  musicCard: {
+    flexShrink: 1,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
   },
-  timezone: {
-    letterSpacing: 0.5,
+  musicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  musicEyebrow: {
+    letterSpacing: 1.6,
+  },
+  musicBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  albumArt: {
+    borderRadius: 14,
+  },
+  albumFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  musicMeta: {
+    flexShrink: 1,
+    gap: 3,
+  },
+  musicTitle: {
+    letterSpacing: -0.2,
+  },
+  musicArtist: {
+    letterSpacing: 0.1,
+  },
+  musicAlbum: {
+    letterSpacing: 0.1,
+  },
+  musicControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  musicControl: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  musicPlayControl: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  musicEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+  },
+  musicEmptyTitle: {
+    textAlign: 'center',
+  },
+  musicEmptyHint: {
+    textAlign: 'center',
+    maxWidth: 360,
+  },
+  grantButton: {
+    marginTop: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  grantText: {
+    letterSpacing: 0.9,
   },
   batteryCard: {
-    width: 210,
+    width: 200,
     minHeight: 150,
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+  },
+  batteryCardCompact: {
+    width: 150,
+    minHeight: 110,
   },
   batteryValue: {
     fontVariant: ['tabular-nums'],

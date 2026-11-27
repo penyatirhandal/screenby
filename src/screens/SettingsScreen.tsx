@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,10 +9,10 @@ import {
   type ScrollViewInstance,
   type ViewInstance,
 } from 'react-native';
-import { Icon } from '../components/Icon';
-import { WallpaperSheet } from '../components/WallpaperSheet';
+import { Icon, type IconName } from '../components/Icon';
 import { Focusable } from '../gamepad/GamepadProvider';
 import { useLauncherPalette } from '../theme/ThemeContext';
+import { withAlpha } from '../theme/colorUtils';
 import {
   FONT_OPTIONS,
   FONT_SIZE_OPTIONS,
@@ -20,12 +21,13 @@ import { useTypography } from '../theme/TypographyContext';
 import { NexusNative } from '../services/NexusNative';
 import { wallpaperUri } from '../services/WallpaperService';
 import type {
-  CropState,
   FontChoice,
   FontSizeChoice,
   GameIconSize,
   LauncherSettings,
   Wallpaper,
+  WallpaperSet,
+  WallpaperSlot,
 } from '../types';
 
 const GAME_ICON_SIZE_OPTIONS: Record<
@@ -44,13 +46,10 @@ interface SettingsScreenProps {
   onSetFont: (font: FontChoice) => Promise<void>;
   onSetFontSize: (size: FontSizeChoice) => Promise<void>;
   onSetGameIconSize: (size: GameIconSize) => Promise<void>;
-  wallpaper: Wallpaper | null;
-  onPickWallpaper: () => Promise<Wallpaper | null>;
-  onSaveCrop: (crop: CropState) => Promise<void>;
-  onRemoveWallpaper: () => Promise<void>;
+  wallpapers: WallpaperSet;
+  onOpenWallpaper: (slot: WallpaperSlot) => void;
+  onRemoveWallpaper: (slot: WallpaperSlot) => Promise<void>;
   dynamicColorAvailable: boolean;
-  wallpaperSheetVisible: boolean;
-  onWallpaperSheetVisibilityChange: (visible: boolean) => void;
 }
 
 export function SettingsScreen({
@@ -60,13 +59,10 @@ export function SettingsScreen({
   onSetFont,
   onSetFontSize,
   onSetGameIconSize,
-  wallpaper,
-  onPickWallpaper,
-  onSaveCrop,
+  wallpapers,
+  onOpenWallpaper,
   onRemoveWallpaper,
   dynamicColorAvailable,
-  wallpaperSheetVisible,
-  onWallpaperSheetVisibilityChange,
 }: SettingsScreenProps): React.JSX.Element | null {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
@@ -112,13 +108,13 @@ export function SettingsScreen({
   }
 
   const applyWallpaper = async () => {
-    if (!wallpaper) {
-      onWallpaperSheetVisibilityChange(true);
+    if (!wallpapers.home) {
+      onOpenWallpaper('home');
       return;
     }
     setApplying(true);
     try {
-      const applied = await NexusNative.setSystemWallpaper(wallpaper.path);
+      const applied = await NexusNative.setSystemWallpaper(wallpapers.home.path);
       Alert.alert(
         applied ? 'Warna diperbarui' : 'Wallpaper belum diterapkan',
         applied
@@ -133,6 +129,31 @@ export function SettingsScreen({
     } finally {
       setApplying(false);
     }
+  };
+
+  const confirmRemoveWallpaper = (slot: WallpaperSlot) => {
+    const label = slot === 'home' ? 'Home' : 'Lock Screen';
+    Alert.alert(
+      'Hapus wallpaper?',
+      `Wallpaper ${label} akan dihapus dan latar bawaan Nexus digunakan kembali.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            onRemoveWallpaper(slot).catch(error => {
+              Alert.alert(
+                'Gagal',
+                error instanceof Error
+                  ? error.message
+                  : 'Wallpaper tidak dapat dihapus.',
+              );
+            });
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -212,30 +233,6 @@ export function SettingsScreen({
           </View>
           <View style={styles.buttonRow}>
             <Focusable
-              id="settings:pickWallpaper"
-              style={({ pressed }) => [
-                styles.button,
-                { borderColor: palette.glassBorder },
-                pressed && styles.pressed,
-              ]}
-              onPress={() => onWallpaperSheetVisibilityChange(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Pilih wallpaper"
-            >
-              <Text
-                style={[
-                  styles.buttonText,
-                  {
-                    color: palette.textPrimary,
-                    fontFamily: fonts.body,
-                    fontSize: scaled(12),
-                  },
-                ]}
-              >
-                Pilih wallpaper
-              </Text>
-            </Focusable>
-            <Focusable
               id="settings:applyWallpaper"
               style={({ pressed }) => [
                 styles.button,
@@ -245,7 +242,7 @@ export function SettingsScreen({
               onPress={() => applyWallpaper()}
               disabled={applying}
               accessibilityRole="button"
-              accessibilityLabel="Terapkan wallpaper ke sistem"
+              accessibilityLabel="Terapkan wallpaper Home ke sistem"
             >
               <Text
                 style={[
@@ -257,25 +254,40 @@ export function SettingsScreen({
                   },
                 ]}
               >
-                {applying ? 'Menerapkan...' : 'Pakai sebagai wallpaper sistem'}
+                {applying ? 'Menerapkan...' : 'Pakai wallpaper Home ke sistem'}
               </Text>
             </Focusable>
           </View>
-          {wallpaper ? (
-            <Text
-              style={[
-                styles.status,
-                {
-                  color: palette.textMuted,
-                  fontFamily: fonts.body,
-                  fontSize: scaled(11),
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {wallpaperUri(wallpaper.path)}
-            </Text>
-          ) : null}
+        </Section>
+
+        <Section title="WALLPAPER" icon="wallpaper">
+          <Text
+            style={[
+              styles.description,
+              {
+                color: palette.textSecondary,
+                fontFamily: fonts.body,
+                fontSize: scaled(13),
+              },
+            ]}
+          >
+            Home dan Lock Screen memakai wallpaper yang terpisah. Atur crop
+            masing-masing tanpa mengubah layar lainnya.
+          </Text>
+          <WallpaperRow
+            slot="home"
+            label="HOME"
+            wallpaper={wallpapers.home}
+            onOpen={onOpenWallpaper}
+            onRemove={confirmRemoveWallpaper}
+          />
+          <WallpaperRow
+            slot="lock"
+            label="LOCK SCREEN"
+            wallpaper={wallpapers.lock}
+            onOpen={onOpenWallpaper}
+            onRemove={confirmRemoveWallpaper}
+          />
         </Section>
 
         <Section title="FONT" icon="font">
@@ -367,15 +379,121 @@ export function SettingsScreen({
           </Text>
         </Section>
       </ScrollView>
+    </View>
+  );
+}
 
-      <WallpaperSheet
-        visible={wallpaperSheetVisible}
-        wallpaper={wallpaper}
-        onClose={() => onWallpaperSheetVisibilityChange(false)}
-        onPick={onPickWallpaper}
-        onSave={onSaveCrop}
-        onRemove={onRemoveWallpaper}
-      />
+function WallpaperRow({
+  slot,
+  label,
+  wallpaper,
+  onOpen,
+  onRemove,
+}: {
+  slot: WallpaperSlot;
+  label: string;
+  wallpaper: Wallpaper | null;
+  onOpen: (slot: WallpaperSlot) => void;
+  onRemove: (slot: WallpaperSlot) => void;
+}): React.JSX.Element {
+  const palette = useLauncherPalette();
+  const { fonts, scaled } = useTypography();
+
+  return (
+    <View
+      style={[
+        styles.wallpaperRow,
+        { backgroundColor: withAlpha(palette.surface, 0.42), borderColor: palette.glassBorder },
+      ]}
+    >
+      <View
+        style={[
+          styles.wallpaperThumb,
+          {
+            backgroundColor: withAlpha(palette.primary, 0.12),
+            borderColor: palette.glassBorder,
+          },
+        ]}
+      >
+        {wallpaper ? (
+          <Image
+            source={{ uri: wallpaperUri(wallpaper.path) }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            accessibilityLabel={`Pratinjau wallpaper ${label}`}
+          />
+        ) : (
+          <Icon name="image" size={scaled(20)} color={palette.textMuted} />
+        )}
+      </View>
+      <View style={styles.wallpaperInfo}>
+        <Text
+          style={[
+            styles.wallpaperLabel,
+            {
+              color: palette.textPrimary,
+              fontFamily: fonts.bodyBold,
+              fontSize: scaled(12),
+            },
+          ]}
+        >
+          {label}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.wallpaperStatus,
+            {
+              color: wallpaper ? palette.textSecondary : palette.textMuted,
+              fontFamily: fonts.body,
+              fontSize: scaled(11),
+            },
+          ]}
+        >
+          {wallpaper ? 'Wallpaper aktif' : 'Belum dipilih'}
+        </Text>
+      </View>
+      <View style={styles.wallpaperActions}>
+        <Focusable
+          id={`settings:wallpaper:${slot}:open`}
+          onPress={() => onOpen(slot)}
+          accessibilityRole="button"
+          accessibilityLabel={`Atur wallpaper ${label}`}
+          style={({ pressed }) => [
+            styles.button,
+            { borderColor: palette.primaryBorder },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.buttonText,
+              {
+                color: palette.primary,
+                fontFamily: fonts.bodySemiBold,
+                fontSize: scaled(12),
+              },
+            ]}
+          >
+            {wallpaper ? 'Ganti' : 'Pilih'}
+          </Text>
+        </Focusable>
+        {wallpaper ? (
+          <Focusable
+            id={`settings:wallpaper:${slot}:remove`}
+            onPress={() => onRemove(slot)}
+            accessibilityRole="button"
+            accessibilityLabel={`Hapus wallpaper ${label}`}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.removeWallpaper,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="trash" size={scaled(16)} color={palette.danger} />
+          </Focusable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -386,7 +504,7 @@ function Section({
   children,
 }: {
   title: string;
-  icon: 'palette' | 'font' | 'textFields' | 'autoAwesome' | 'grid';
+  icon: IconName;
   children: React.ReactNode;
 }): React.JSX.Element {
   const palette = useLauncherPalette();
@@ -536,6 +654,46 @@ const styles = StyleSheet.create({
   status: {
     flexShrink: 1,
     marginLeft: 6,
+  },
+  wallpaperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 10,
+  },
+  wallpaperThumb: {
+    width: 92,
+    height: 52,
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wallpaperInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  wallpaperLabel: {
+    letterSpacing: 1,
+  },
+  wallpaperStatus: {
+    flexShrink: 1,
+  },
+  wallpaperActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  removeWallpaper: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonRow: {
     flexDirection: 'row',

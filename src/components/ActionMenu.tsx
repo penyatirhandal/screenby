@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
   Text,
 } from 'react-native';
 import { Focusable } from '../gamepad/GamepadProvider';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { colors } from '../theme/colors';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { useTypography } from '../theme/TypographyContext';
@@ -34,6 +37,8 @@ export function ActionMenu({
 }: ActionMenuProps): React.JSX.Element {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
+  const reduceMotion = useReduceMotion();
+  const enter = useRef(new Animated.Value(0)).current;
   // The menu opens beneath the finger that long-pressed a card. Ignore the
   // release of that same gesture so it cannot immediately activate an option.
   const [ready, setReady] = useState(false);
@@ -47,6 +52,26 @@ export function ActionMenu({
     return () => clearTimeout(timer);
   }, [visible]);
 
+  useEffect(() => {
+    if (!visible) {
+      enter.setValue(0);
+      return;
+    }
+    if (reduceMotion) {
+      enter.setValue(1);
+      return;
+    }
+    enter.setValue(0);
+    const animation = Animated.timing(enter, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [enter, reduceMotion, visible]);
+
   return (
     <Modal
       visible={visible}
@@ -59,16 +84,26 @@ export function ActionMenu({
         onPress={onClose}
         disabled={!ready}
       >
-        <Pressable
-          style={[
-            styles.panel,
-            {
-              backgroundColor: palette.glassStrong,
-              borderColor: palette.glassBorder,
-            },
-          ]}
-          accessibilityRole="menu"
-        >
+        <Pressable style={styles.panelHost} onPress={() => undefined}>
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                backgroundColor: palette.glassStrong,
+                borderColor: palette.glassBorder,
+                opacity: enter,
+                transform: [
+                  {
+                    scale: enter.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.94, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+            accessibilityRole="menu"
+          >
           {title ? (
             <Text
               style={[
@@ -127,6 +162,7 @@ export function ActionMenu({
               </Text>
             </Focusable>
           ))}
+          </Animated.View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -140,6 +176,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.scrimBottom,
     padding: 24,
+  },
+  panelHost: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   panel: {
     width: 280,

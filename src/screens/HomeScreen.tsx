@@ -22,13 +22,14 @@ import {
   Icon,
   type IconName,
 } from '../components/Icon';
-import {WallpaperBackdrop} from '../components/WallpaperBackdrop';
-import {WidgetPickerSheet} from '../components/WidgetPickerSheet';
-import {Focusable} from '../gamepad/GamepadProvider';
-import {useBattery} from '../hooks/useBattery';
-import {useClock, type ClockInfo} from '../hooks/useClock';
-import {useNetwork} from '../hooks/useNetwork';
-import {useNowPlaying, type NowPlayingController} from '../hooks/useNowPlaying';
+import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
+import { ScreenTransition } from '../components/ScreenTransition';
+import { WidgetPickerSheet } from '../components/WidgetPickerSheet';
+import { Focusable } from '../gamepad/GamepadProvider';
+import { useBattery } from '../hooks/useBattery';
+import { useClock, type ClockInfo } from '../hooks/useClock';
+import { useNetwork } from '../hooks/useNetwork';
+import type { NowPlayingController } from '../hooks/useNowPlaying';
 import AppWidgetView from '../native/AppWidgetViewNativeComponent';
 import {NexusWidgets} from '../services/NexusWidgets';
 import {wallpaperUri} from '../services/WallpaperService';
@@ -57,6 +58,7 @@ interface HomeScreenProps {
   desktopItems: DesktopWidgetItem[];
   gameIconSize: GameIconSize;
   wallpaper: Wallpaper | null;
+  media: NowPlayingController;
   onOpenApps: () => void;
   onOpenSettings: () => void;
   onPlay: (game: PinnedGame) => void;
@@ -140,6 +142,7 @@ export function HomeScreen({
   desktopItems,
   gameIconSize,
   wallpaper,
+  media,
   onOpenApps,
   onOpenSettings,
   onPlay,
@@ -156,7 +159,6 @@ export function HomeScreen({
   const clock = useClock();
   const battery = useBattery();
   const network = useNetwork();
-  const media = useNowPlaying();
 
   const [wallpaperFailed, setWallpaperFailed] = useState(false);
   const [gameAreaSize, setGameAreaSize] = useState({width: 0, height: 0});
@@ -300,7 +302,13 @@ export function HomeScreen({
           </View>
         </View>
 
-        {tab === 'desktop' ? (
+        <ScreenTransition
+          key={tab}
+          style={styles.tabBody}
+          from={tab === 'desktop' ? 'left' : 'right'}
+          duration={240}
+        >
+          {tab === 'desktop' ? (
           <DesktopCanvas
             items={desktopItems}
             clock={clock}
@@ -448,6 +456,7 @@ export function HomeScreen({
             </Focusable>
           </View>
         )}
+        </ScreenTransition>
 
         <View style={styles.actionBar}>
           <ActionButton id="action:apps" icon="apps" label="Apps" onPress={onOpenApps} />
@@ -1313,6 +1322,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'space-between',
+  },
+  tabBody: {
+    flex: 1,
+    minHeight: 0,
   },
   topRow: {
     flexDirection: 'row',

@@ -8,12 +8,15 @@ import React, {
   useState,
 } from 'react';
 import {
+  Animated,
+  PanResponder,
   Pressable,
   StyleSheet,
   View,
   type ViewInstance,
 } from 'react-native';
 import { subscribeToGamepad } from '../services/NexusGamepad';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { mapGamepadEvent } from './mapInput';
 import { pickFocusTarget, type Rect } from './navigation';
@@ -39,11 +42,15 @@ export interface GamepadHandlers {
 
 interface GamepadContextValue {
   focusedId: string | null;
+  /** Focus ring is only drawn after real gamepad input, never for touch/initial focus. */
+  focusRingVisible: boolean;
+  hideFocusRing: () => void;
   register: (target: FocusTarget) => () => void;
 }
 
 const GamepadContext = createContext<GamepadContextValue | null>(null);
 const MOVE_THROTTLE_MS = 220;
+export const FOCUS_RING_TIMEOUT_MS = 4000;
 
 function measureView(
   ref: React.RefObject<ViewInstance | null>,
@@ -81,11 +88,41 @@ export function GamepadProvider({
   const targets = useRef(new Map<string, FocusTarget>());
   const activeId = useRef<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [focusRingVisible, setFocusRingVisible] = useState(false);
+  const ringTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handlersRef = useRef(handlers);
   const moving = useRef(false);
   const pendingDirection = useRef<GamepadDirection | null>(null);
   const lastMove = useRef<{direction: GamepadDirection; time: number} | null>(
     null,
+  );
+
+  const revealFocusRing = useCallback(() => {
+    setFocusRingVisible(true);
+    if (ringTimeout.current) {
+      clearTimeout(ringTimeout.current);
+    }
+    ringTimeout.current = setTimeout(() => {
+      ringTimeout.current = null;
+      setFocusRingVisible(false);
+    }, FOCUS_RING_TIMEOUT_MS);
+  }, []);
+
+  const hideFocusRing = useCallback(() => {
+    if (ringTimeout.current) {
+      clearTimeout(ringTimeout.current);
+      ringTimeout.current = null;
+    }
+    setFocusRingVisible(false);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (ringTimeout.current) {
+        clearTimeout(ringTimeout.current);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -192,6 +229,9 @@ export function GamepadProvider({
       if (!input) {
         return;
       }
+      if (input.kind === 'key' || input.direction) {
+        revealFocusRing();
+      }
 
       if (input.kind === 'axis') {
         if (!input.direction || !shouldMove(input.direction)) {
@@ -240,16 +280,33 @@ export function GamepadProvider({
         default:
           break;
       }
-    }), [moveFocus, shouldMove]);
+    }), [moveFocus, revealFocusRing, shouldMove]);
 
   const value = useMemo(
-    () => ({focusedId, register}),
-    [focusedId, register],
+    () => ({focusedId, focusRingVisible, hideFocusRing, register}),
+    [focusedId, focusRingVisible, hideFocusRing, register],
+  );
+
+  const touchCapture = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponderCapture: () => {
+          hideFocusRing();
+          return false;
+        },
+      }),
+    [hideFocusRing],
   );
 
   return (
     <GamepadContext.Provider value={value}>
-      {children}
+      <View
+        testID="gamepad-root"
+        style={styles.root}
+        {...touchCapture.panHandlers}
+      >
+        {children}
+      </View>
     </GamepadContext.Provider>
   );
 }
@@ -284,6 +341,8 @@ export function Focusable({
   children,
   onPress,
   onFocus,
+  onLongPress,
+  onPressIn,
   priority = 0,
   layer = 0,
   enabled = true,
@@ -294,7 +353,8 @@ export function Focusable({
   viewRef,
   ...rest
 }: FocusableProps): React.JSX.Element {
-  const {focusedId, register} = useGamepadFocus();
+  const {focusedId, focusRingVisible, hideFocusRing, register} =
+    useGamepadFocus();
   const palette = useLauncherPalette();
   const ref = useRef<ViewInstance | null>(null);
   const onPressRef = useRef(onPress);
@@ -336,7 +396,22 @@ export function Focusable({
       testID={id}
       {...rest}
       focusable={false}
-      onPress={onPress}
+      onPressIn={event => {
+        hideFocusRing();
+        onPressIn?.(event);
+      }}
+      onLongPress={
+        onLongPress
+          ? event => {
+              hideFocusRing();
+              onLongPress(event);
+            }
+          : undefined
+      }
+      onPress={() => {
+        hideFocusRing();
+        onPressRef.current?.();
+      }}
       disabled={disabled}
       accessibilityState={{
         ...accessibilityState,
@@ -345,24 +420,67 @@ export function Focusable({
       style={style}
     >
       {children}
-      {focused ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.ring,
-            {
-              borderColor: palette.primary,
-              borderRadius: ringRadius,
-              shadowColor: palette.primary,
-            },
-          ]}
-        />
+      {focused && focusRingVisible ? (
+        <FocusRing id={id} color={palette.primary} radius={ringRadius} />
       ) : null}
     </Pressable>
   );
 }
 
+function FocusRing({
+  id,
+  color,
+  radius,
+}: {
+  id: string;
+  color: string;
+  radius: number;
+}): React.JSX.Element {
+  const reduceMotion = useReduceMotion();
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      progress.setValue(1);
+      return;
+    }
+    const animation = Animated.spring(progress, {
+      toValue: 1,
+      friction: 7,
+      tension: 140,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [progress, reduceMotion]);
+
+  const scale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1],
+  });
+
+  return (
+    <Animated.View
+      testID={`${id}:focus-ring`}
+      pointerEvents="none"
+      style={[
+        styles.ring,
+        {
+          borderColor: color,
+          borderRadius: radius,
+          shadowColor: color,
+          opacity: progress,
+          transform: [{scale}],
+        },
+      ]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   ring: {
     ...StyleSheet.absoluteFill,
     borderWidth: 2,

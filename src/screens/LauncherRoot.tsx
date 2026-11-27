@@ -1,18 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppState, BackHandler, Platform } from 'react-native';
+import { Alert, AppState, BackHandler, Platform, StyleSheet } from 'react-native';
 import { ActionMenu, type MenuOption } from '../components/ActionMenu';
 import { GameEditSheet, type GameEditPatch } from '../components/GameEditSheet';
 import { GameInfoDialog } from '../components/GameInfoDialog';
+import { ScreenTransition } from '../components/ScreenTransition';
+import { WallpaperSheet } from '../components/WallpaperSheet';
 import { GamepadProvider } from '../gamepad/GamepadProvider';
 import { useGameLibrary } from '../hooks/useGameLibrary';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
+import { useNowPlaying } from '../hooks/useNowPlaying';
 import { useWallpaper } from '../hooks/useWallpaper';
 import {
   NexusNative,
   subscribeToScreenEvents,
 } from '../services/NexusNative';
 import type { LauncherThemeController } from '../hooks/useLauncherTheme';
-import type { HomeTab, LauncherApp, PinnedGame } from '../types';
+import type {
+  HomeTab,
+  LauncherApp,
+  PinnedGame,
+  WallpaperSlot,
+} from '../types';
 import { AppsScreen } from './AppsScreen';
 import { HomeScreen } from './HomeScreen';
 import { LockScreen } from './LockScreen';
@@ -34,15 +42,17 @@ export function LauncherRoot({
   const [editing, setEditing] = useState<PinnedGame | null>(null);
   const [menuGame, setMenuGame] = useState<PinnedGame | null>(null);
   const [infoGame, setInfoGame] = useState<PinnedGame | null>(null);
-  const [wallpaperSheetOpen, setWallpaperSheetOpen] = useState(false);
+  const [wallpaperSheetSlot, setWallpaperSheetSlot] =
+    useState<WallpaperSlot | null>(null);
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
+  const media = useNowPlaying();
 
   const showLock = useCallback(() => {
     setMenuGame(null);
     setEditing(null);
     setInfoGame(null);
-    setWallpaperSheetOpen(false);
+    setWallpaperSheetSlot(null);
     setHomeTab('desktop');
     setScreen('lock');
   }, []);
@@ -86,16 +96,15 @@ export function LauncherRoot({
       setInfoGame(null);
       return;
     }
-    if (screen === 'settings' && wallpaperSheetOpen) {
-      setWallpaperSheetOpen(false);
+    if (wallpaperSheetSlot) {
+      setWallpaperSheetSlot(null);
       return;
     }
     if (screen !== 'home') {
-      setWallpaperSheetOpen(false);
       setScreen('home');
     }
     // A launcher never closes on Back.
-  }, [editing, infoGame, menuGame, screen, wallpaperSheetOpen]);
+  }, [editing, infoGame, menuGame, screen, wallpaperSheetSlot]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -168,19 +177,19 @@ export function LauncherRoot({
         if (screen === 'home') {
           setHomeTab(side === 'left' ? 'desktop' : 'games');
         } else if (screen !== 'lock') {
-          setWallpaperSheetOpen(false);
+          setWallpaperSheetSlot(null);
           setScreen('home');
         }
       },
       onStart: () => {
         if (screen !== 'lock') {
-          setWallpaperSheetOpen(false);
+          setWallpaperSheetSlot(null);
           setScreen('settings');
         }
       },
       onSelect: () => {
         if (screen !== 'lock') {
-          setWallpaperSheetOpen(false);
+          setWallpaperSheetSlot(null);
           setScreen('apps');
         }
       },
@@ -226,78 +235,122 @@ export function LauncherRoot({
   return (
     <GamepadProvider handlers={gamepadHandlers}>
       {screen === 'home' ? (
-        <HomeScreen
-          games={library.games}
-          tab={homeTab}
-          onTabChange={setHomeTab}
-          desktopItems={settings.settings.desktopItems}
-          gameIconSize={settings.settings.gameIconSize}
-          wallpaper={wallpaper.wallpaper}
-          onOpenApps={() => {
-            setWallpaperSheetOpen(false);
-            setScreen('apps');
-          }}
-          onOpenSettings={() => {
-            setWallpaperSheetOpen(false);
-            setScreen('settings');
-          }}
-          onPlay={game => play(game)}
-          onLongPressGame={setMenuGame}
-          onAddBuiltinWidget={settings.addBuiltinWidget}
-          onAddAppWidget={settings.addAppWidget}
-          onUpdateWidget={settings.updateWidget}
-          onRemoveWidget={settings.removeWidget}
-        />
+        <ScreenTransition key="home" style={StyleSheet.absoluteFill}>
+          <HomeScreen
+            games={library.games}
+            tab={homeTab}
+            onTabChange={setHomeTab}
+            desktopItems={settings.settings.desktopItems}
+            gameIconSize={settings.settings.gameIconSize}
+            wallpaper={wallpaper.wallpapers.home}
+            media={media}
+            onOpenApps={() => {
+              setWallpaperSheetSlot(null);
+              setScreen('apps');
+            }}
+            onOpenSettings={() => {
+              setWallpaperSheetSlot(null);
+              setScreen('settings');
+            }}
+            onPlay={game => play(game)}
+            onLongPressGame={setMenuGame}
+            onAddBuiltinWidget={settings.addBuiltinWidget}
+            onAddAppWidget={settings.addAppWidget}
+            onUpdateWidget={settings.updateWidget}
+            onRemoveWidget={settings.removeWidget}
+          />
+        </ScreenTransition>
       ) : null}
 
       {screen === 'lock' ? (
-        <LockScreen
-          wallpaper={wallpaper.wallpaper}
-          onUnlock={unlock}
-          onOpenSettings={() => {
-            setWallpaperSheetOpen(false);
-            setScreen('settings');
-          }}
-        />
+        <ScreenTransition
+          key="lock"
+          style={StyleSheet.absoluteFill}
+          from="fade"
+          duration={320}
+        >
+          <LockScreen
+            wallpaper={wallpaper.wallpapers.lock}
+            media={media}
+            onUnlock={unlock}
+            onOpenWallpaper={() => setWallpaperSheetSlot('lock')}
+          />
+        </ScreenTransition>
       ) : null}
 
-      <AppsScreen
-        visible={screen === 'apps'}
-        pinned={library.games}
-        onClose={() => {
-          setWallpaperSheetOpen(false);
-          setScreen('home');
+      {screen === 'apps' ? (
+        <ScreenTransition key="apps" style={StyleSheet.absoluteFill} from="right">
+          <AppsScreen
+            visible
+            pinned={library.games}
+            onClose={() => {
+              setWallpaperSheetSlot(null);
+              setScreen('home');
+            }}
+            onOpenSettings={() => {
+              setWallpaperSheetSlot(null);
+              setScreen('settings');
+            }}
+            onPin={pin}
+            onUnpin={library.unpin}
+            onLaunched={library.recordPlay}
+          />
+        </ScreenTransition>
+      ) : null}
+
+      {screen === 'settings' ? (
+        <ScreenTransition key="settings" style={StyleSheet.absoluteFill} from="right">
+          <SettingsScreen
+            visible
+            onClose={() => {
+              setWallpaperSheetSlot(null);
+              setScreen('home');
+            }}
+            settings={settings.settings}
+            onSetFont={settings.setFont}
+            onSetFontSize={settings.setFontSize}
+            onSetGameIconSize={settings.setGameIconSize}
+            wallpapers={wallpaper.wallpapers}
+            onOpenWallpaper={slot => setWallpaperSheetSlot(slot)}
+            onRemoveWallpaper={slot => wallpaper.remove(slot)}
+            dynamicColorAvailable={dynamicColorAvailable}
+          />
+        </ScreenTransition>
+      ) : null}
+
+      <WallpaperSheet
+        visible={wallpaperSheetSlot !== null}
+        slot={wallpaperSheetSlot}
+        wallpaper={
+          wallpaperSheetSlot ? wallpaper.wallpapers[wallpaperSheetSlot] : null
+        }
+        onClose={() => setWallpaperSheetSlot(null)}
+        onPick={() => {
+          const slot = wallpaperSheetSlot;
+          if (!slot) {
+            return Promise.resolve(null);
+          }
+          return wallpaper.choose(slot);
         }}
-        onOpenSettings={() => {
-          setWallpaperSheetOpen(false);
-          setScreen('settings');
+        onSave={async crop => {
+          const slot = wallpaperSheetSlot;
+          if (!slot) {
+            return;
+          }
+          await wallpaper.saveCrop(slot, crop);
+          if (slot === 'home') {
+            await applyWallpaper();
+          }
         }}
-        onPin={pin}
-        onUnpin={library.unpin}
-        onLaunched={library.recordPlay}
+        onRemove={async () => {
+          const slot = wallpaperSheetSlot;
+          if (!slot) {
+            return;
+          }
+          await wallpaper.remove(slot);
+        }}
       />
 
-      <SettingsScreen
-        visible={screen === 'settings'}
-        onClose={() => {
-          setWallpaperSheetOpen(false);
-          setScreen('home');
-        }}
-        settings={settings.settings}
-        onSetFont={settings.setFont}
-        onSetFontSize={settings.setFontSize}
-        onSetGameIconSize={settings.setGameIconSize}
-        wallpaper={wallpaper.wallpaper}
-        onPickWallpaper={wallpaper.choose}
-        onSaveCrop={async crop => {
-          await wallpaper.saveCrop(crop);
-          await applyWallpaper();
-        }}
-        onRemoveWallpaper={wallpaper.remove}
-        dynamicColorAvailable={dynamicColorAvailable}
-        wallpaperSheetVisible={wallpaperSheetOpen}
-        onWallpaperSheetVisibilityChange={setWallpaperSheetOpen}
-      />
 
       <GameEditSheet
         visible={editing !== null}

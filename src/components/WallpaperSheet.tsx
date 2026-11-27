@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Image,
   Modal,
   PanResponder,
@@ -14,7 +16,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Focusable } from '../gamepad/GamepadProvider';
-import type { CropState, Wallpaper } from '../types';
+import { useReduceMotion } from '../hooks/useReduceMotion';
+import type { CropState, Wallpaper, WallpaperSlot } from '../types';
 import {
   computeCoverLayout,
   DEFAULT_CROP,
@@ -32,6 +35,7 @@ import { Icon } from './Icon';
 
 interface WallpaperSheetProps {
   visible: boolean;
+  slot: WallpaperSlot | null;
   wallpaper: Wallpaper | null;
   onClose: () => void;
   onPick: () => Promise<Wallpaper | null>;
@@ -52,6 +56,7 @@ function errorMessage(error: unknown): string {
 
 export function WallpaperSheet({
   visible,
+  slot,
   wallpaper,
   onClose,
   onPick,
@@ -59,11 +64,13 @@ export function WallpaperSheet({
   onRemove,
 }: WallpaperSheetProps): React.JSX.Element {
   const [draft, setDraft] = useState<CropState>(DEFAULT_CROP);
-  const [slot, setSlot] = useState<Size>({ width: 0, height: 0 });
+  const [slotSize, setSlotSize] = useState<Size>({ width: 0, height: 0 });
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reduceMotion = useReduceMotion();
+  const enter = useRef(new Animated.Value(0)).current;
   const { fonts, scaled } = useTypography();
   const textStyle = (
     style: TextStyle,
@@ -97,19 +104,41 @@ export function WallpaperSheet({
     }
   }, [visible, wallpaper]);
 
+  useEffect(() => {
+    if (!visible) {
+      enter.setValue(0);
+      return;
+    }
+    if (reduceMotion) {
+      enter.setValue(1);
+      return;
+    }
+    enter.setValue(0);
+    const animation = Animated.timing(enter, {
+      toValue: 1,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [enter, reduceMotion, visible]);
+
+  const slotLabel = slot === 'lock' ? 'Lock Screen' : 'Home';
+
   const preview = useMemo<Size>(() => {
-    if (slot.width <= 0 || slot.height <= 0) {
+    if (slotSize.width <= 0 || slotSize.height <= 0) {
       return { width: 0, height: 0 };
     }
     const aspect = Math.max(screenAspect, 0.4);
-    let width = slot.width;
+    let width = slotSize.width;
     let height = width / aspect;
-    if (height > slot.height) {
-      height = slot.height;
+    if (height > slotSize.height) {
+      height = slotSize.height;
       width = height * aspect;
     }
     return { width: Math.floor(width), height: Math.floor(height) };
-  }, [slot, screenAspect]);
+  }, [slotSize, screenAspect]);
 
   useEffect(() => {
     previewRef.current = preview;
@@ -250,16 +279,34 @@ export function WallpaperSheet({
           accessible={false}
         />
 
-        <View style={[styles.panel, { height: panelHeight }]}>
+        <Animated.View
+          style={[
+            styles.panel,
+            { height: panelHeight },
+            {
+              opacity: enter,
+              transform: [
+                {
+                  scale: enter.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.96, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
           <View style={styles.header}>
             <View style={styles.titleGroup}>
               <View style={styles.titleIcon}>
                 <Icon name="wallpaper" size={19} color={colors.primary} />
               </View>
               <View style={styles.titleTextGroup}>
-                <Text style={textStyle(styles.title, 17, true)}>Wallpaper</Text>
+                <Text style={textStyle(styles.title, 17, true)}>
+                  Wallpaper {slotLabel}
+                </Text>
                 <Text style={textStyle(styles.subtitle, 11.5)} numberOfLines={1}>
-                  Pilih gambar dan atur titik fokus crop landscape
+                  Pilih gambar dan atur titik fokus crop {slotLabel}
                 </Text>
               </View>
             </View>
@@ -285,7 +332,7 @@ export function WallpaperSheet({
               style={styles.previewSlot}
               onLayout={event => {
                 const { width, height } = event.nativeEvent.layout;
-                setSlot(current =>
+                setSlotSize(current =>
                   Math.abs(current.width - width) < 1 &&
                   Math.abs(current.height - height) < 1
                     ? current
@@ -551,7 +598,7 @@ export function WallpaperSheet({
               </Focusable>
             </View>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

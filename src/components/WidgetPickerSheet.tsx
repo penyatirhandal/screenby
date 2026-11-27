@@ -1,5 +1,7 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -9,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import {Focusable} from '../gamepad/GamepadProvider';
+import {useReduceMotion} from '../hooks/useReduceMotion';
 import {NexusWidgets} from '../services/NexusWidgets';
 import {DESKTOP_WIDGETS} from '../services/LauncherSettingsService';
 import {colors} from '../theme/colors';
@@ -49,10 +52,32 @@ export function WidgetPickerSheet({
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
   const {width: windowWidth} = useWindowDimensions();
+  const reduceMotion = useReduceMotion();
+  const enter = useRef(new Animated.Value(0)).current;
   const [providers, setProviders] = useState<WidgetProvider[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      enter.setValue(0);
+      return;
+    }
+    if (reduceMotion) {
+      enter.setValue(1);
+      return;
+    }
+    enter.setValue(0);
+    const animation = Animated.timing(enter, {
+      toValue: 1,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [enter, reduceMotion, visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -101,17 +126,27 @@ export function WidgetPickerSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} disabled={!ready}>
-        <Pressable
-          style={[
-            styles.panel,
-            {
-              width: Math.min(760, windowWidth - 40),
-              backgroundColor: palette.glassStrong,
-              borderColor: palette.glassBorder,
-            },
-          ]}
-          accessibilityRole="menu"
-        >
+        <Pressable style={styles.panelHost} onPress={() => undefined}>
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                width: Math.min(760, windowWidth - 40),
+                backgroundColor: palette.glassStrong,
+                borderColor: palette.glassBorder,
+                opacity: enter,
+                transform: [
+                  {
+                    scale: enter.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.95, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+            accessibilityRole="menu"
+          >
           <View style={styles.header}>
             <Text
               style={[
@@ -283,6 +318,7 @@ export function WidgetPickerSheet({
               ))}
             </View>
           </ScrollView>
+          </Animated.View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -296,6 +332,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.scrimBottom,
     padding: 20,
+  },
+  panelHost: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxHeight: '88%',
   },
   panel: {
     maxHeight: '80%',

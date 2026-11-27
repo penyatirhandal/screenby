@@ -430,9 +430,9 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   // ---------------------------------------------------------------------------------------------
 
   @ReactMethod
-  fun saveWallpaper(uriString: String, promise: Promise) {
+  fun saveWallpaper(uriString: String, slot: String, promise: Promise) {
     try {
-      promise.resolve(importWallpaper(uriString))
+      promise.resolve(importWallpaper(uriString, wallpaperSlot(slot)))
     } catch (e: OutOfMemoryError) {
       promise.reject("E_WALLPAPER_MEMORY", "Gambar terlalu besar untuk diproses.", e)
     } catch (e: Exception) {
@@ -441,9 +441,13 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun clearWallpapers(promise: Promise) {
+  fun clearWallpaper(slot: String, promise: Promise) {
     try {
-      File(reactContext.filesDir, WALLPAPER_DIRECTORY).listFiles()?.forEach { it.delete() }
+      val prefix = "wallpaper-${wallpaperSlot(slot)}-"
+      File(reactContext.filesDir, WALLPAPER_DIRECTORY)
+          .listFiles()
+          ?.filter { it.name.startsWith(prefix) }
+          ?.forEach { it.delete() }
       promise.resolve(true)
     } catch (e: Exception) {
       promise.reject("E_WALLPAPER", e.message ?: "Gagal menghapus wallpaper.", e)
@@ -464,7 +468,7 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
    * downsizes it to a memory friendly size. The JS layer only needs the resulting path
    * and the real pixel dimensions for the smart-crop calculation.
    */
-  private fun importWallpaper(uriString: String): WritableMap {
+  private fun importWallpaper(uriString: String, slot: String): WritableMap {
     val uri = Uri.parse(uriString)
     val resolver = reactContext.contentResolver
 
@@ -519,14 +523,20 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     }
 
     val directory = File(reactContext.filesDir, WALLPAPER_DIRECTORY).apply { mkdirs() }
-    directory.listFiles()?.forEach { it.delete() }
-    val file = File(directory, "wallpaper-${System.currentTimeMillis()}.jpg")
+    val file = File(directory, "wallpaper-$slot-${System.currentTimeMillis()}.jpg")
 
     FileOutputStream(file).use { output ->
       if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) {
         throw IOException("Gagal mengompres gambar.")
       }
     }
+
+    // Replacing one slot must not touch the wallpaper used by the other screen.
+    val prefix = "wallpaper-$slot-"
+    directory
+        .listFiles()
+        ?.filter { it != file && it.name.startsWith(prefix) }
+        ?.forEach { it.delete() }
 
     val result = Arguments.createMap().apply {
       putString("path", file.absolutePath)
@@ -536,6 +546,8 @@ class NexusNativeModule(private val reactContext: ReactApplicationContext) :
     bitmap.recycle()
     return result
   }
+
+  private fun wallpaperSlot(slot: String): String = if (slot == "lock") "lock" else "home"
 
   private fun applyOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
     val matrix = Matrix()

@@ -38,6 +38,8 @@ export interface CropState {
   zoom: number;
 }
 
+export type WallpaperSlot = 'home' | 'lock';
+
 export interface Wallpaper {
   /** Absolute path inside app-private storage (no file:// prefix). */
   path: string;
@@ -45,6 +47,11 @@ export interface Wallpaper {
   width: number;
   height: number;
   crop: CropState;
+}
+
+export interface WallpaperSet {
+  home: Wallpaper | null;
+  lock: Wallpaper | null;
 }
 
 export interface ImportedWallpaper {

@@ -5,6 +5,7 @@ import type {
   LauncherApp,
   NetworkState,
   WallpaperColors,
+  WallpaperSlot,
 } from '../types';
 
 interface NexusNativeInterface {
@@ -14,8 +15,8 @@ interface NexusNativeInterface {
   toggleFlashlight(): Promise<boolean>;
   openCamera(): Promise<boolean>;
   exitLockScreen(): Promise<boolean>;
-  saveWallpaper(uri: string): Promise<ImportedWallpaper>;
-  clearWallpapers(): Promise<boolean>;
+  saveWallpaper(uri: string, slot: WallpaperSlot): Promise<ImportedWallpaper>;
+  clearWallpaper(slot: WallpaperSlot): Promise<boolean>;
   fileExists(path: string): Promise<boolean>;
   getInstalledApps(): Promise<LauncherApp[]>;
   launchApp(packageName: string): Promise<boolean>;
@@ -83,13 +84,15 @@ export const NexusNative = {
     return nativeModule ? nativeModule.exitLockScreen() : unavailable();
   },
 
-  saveWallpaper(uri: string): Promise<ImportedWallpaper> {
-    return nativeModule ? nativeModule.saveWallpaper(uri) : unavailable();
+  saveWallpaper(uri: string, slot: WallpaperSlot): Promise<ImportedWallpaper> {
+    return nativeModule
+      ? nativeModule.saveWallpaper(uri, slot)
+      : unavailable();
   },
 
-  clearWallpapers(): Promise<boolean> {
+  clearWallpaper(slot: WallpaperSlot): Promise<boolean> {
     return nativeModule
-      ? nativeModule.clearWallpapers()
+      ? nativeModule.clearWallpaper(slot)
       : Promise.resolve(false);
   },
 

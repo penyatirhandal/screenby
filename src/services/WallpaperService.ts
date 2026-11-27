@@ -1,12 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { launchImageLibrary } from 'react-native-image-picker';
-import type { CropState, Wallpaper } from '../types';
+import type { CropState, Wallpaper, WallpaperSet, WallpaperSlot } from '../types';
 import { DEFAULT_CROP, sanitizeCrop } from '../utils/smartCrop';
 import { NexusNative } from './NexusNative';
 
-const STORAGE_KEY = '@nexus/lock-screen/wallpaper/v1';
+const LEGACY_STORAGE_KEY = '@nexus/lock-screen/wallpaper/v1';
 
-function parseWallpaper(raw: string): Wallpaper | null {
+/** Home and Lock Screen keep independent wallpaper references. */
+export const WALLPAPER_STORAGE_KEYS: Record<WallpaperSlot, string> = {
+  home: '@nexus/lock-screen/wallpaper/home/v2',
+  lock: '@nexus/lock-screen/wallpaper/lock/v2',
+};
+
+function parseWallpaper(raw: string | null): Wallpaper | null {
+  if (!raw) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(raw) as Partial<Wallpaper>;
     if (
@@ -29,40 +38,78 @@ function parseWallpaper(raw: string): Wallpaper | null {
   }
 }
 
-/**
- * Loads the persisted wallpaper. A wallpaper whose file disappeared (cache clean,
- * uninstall leftovers, ...) is dropped so the UI can fall back gracefully.
- */
-export async function loadWallpaper(): Promise<Wallpaper | null> {
+async function readStoredWallpaper(key: string): Promise<Wallpaper | null> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(key);
+    const wallpaper = parseWallpaper(raw);
     if (!raw) {
       return null;
     }
-
-    const wallpaper = parseWallpaper(raw);
     if (!wallpaper) {
-      await AsyncStorage.removeItem(STORAGE_KEY);
+      await AsyncStorage.removeItem(key);
       return null;
     }
 
     const exists = await NexusNative.fileExists(wallpaper.path);
     if (!exists) {
-      await AsyncStorage.removeItem(STORAGE_KEY);
+      await AsyncStorage.removeItem(key);
       return null;
     }
-
     return wallpaper;
   } catch {
     return null;
   }
 }
 
+async function writeWallpaper(
+  slot: WallpaperSlot,
+  wallpaper: Wallpaper,
+): Promise<void> {
+  await AsyncStorage.setItem(
+    WALLPAPER_STORAGE_KEYS[slot],
+    JSON.stringify(wallpaper),
+  );
+}
+
 /**
- * Opens the system photo picker and imports the chosen image into app-private storage.
- * Returns null when the user cancels.
+ * Loads both wallpaper slots. The first run after upgrading from the shared
+ * wallpaper build copies the old image into both slots so nothing disappears.
  */
-export async function pickWallpaper(): Promise<Wallpaper | null> {
+export async function loadWallpapers(): Promise<WallpaperSet> {
+  const [home, lock] = await Promise.all([
+    readStoredWallpaper(WALLPAPER_STORAGE_KEYS.home),
+    readStoredWallpaper(WALLPAPER_STORAGE_KEYS.lock),
+  ]);
+
+  if (home || lock) {
+    return { home, lock };
+  }
+
+  const legacy = await readStoredWallpaper(LEGACY_STORAGE_KEY);
+  if (!legacy) {
+    return { home: null, lock: null };
+  }
+
+  try {
+    await Promise.all([
+      writeWallpaper('home', legacy),
+      writeWallpaper('lock', legacy),
+      AsyncStorage.removeItem(LEGACY_STORAGE_KEY),
+    ]);
+  } catch {
+    // The in-memory result is still usable even if persistence fails.
+  }
+
+  return { home: legacy, lock: legacy };
+}
+
+/**
+ * Opens the system photo picker and imports the chosen image into the requested
+ * slot. Returns null when the user cancels.
+ */
+export async function pickWallpaper(
+  slot: WallpaperSlot,
+): Promise<Wallpaper | null> {
   const result = await launchImageLibrary({
     mediaType: 'photo',
     selectionLimit: 1,
@@ -83,7 +130,7 @@ export async function pickWallpaper(): Promise<Wallpaper | null> {
     throw new Error('Tidak ada gambar yang dipilih.');
   }
 
-  const imported = await NexusNative.saveWallpaper(asset.uri);
+  const imported = await NexusNative.saveWallpaper(asset.uri, slot);
   const wallpaper: Wallpaper = {
     path: imported.path,
     width: imported.width,
@@ -91,23 +138,37 @@ export async function pickWallpaper(): Promise<Wallpaper | null> {
     crop: { ...DEFAULT_CROP },
   };
 
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(wallpaper));
+  await writeWallpaper(slot, wallpaper);
   return wallpaper;
 }
 
 export async function persistCrop(
+  slot: WallpaperSlot,
   wallpaper: Wallpaper,
   crop: CropState,
 ): Promise<Wallpaper> {
   const next: Wallpaper = { ...wallpaper, crop: sanitizeCrop(crop) };
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  await writeWallpaper(slot, next);
   return next;
 }
 
-export async function removeWallpaper(): Promise<void> {
-  await AsyncStorage.removeItem(STORAGE_KEY);
+/**
+ * Removes one slot. A file that is still referenced by the other slot (the
+ * legacy shared wallpaper) is kept so the other screen does not go blank.
+ */
+export async function removeWallpaper(
+  slot: WallpaperSlot,
+  previous: Wallpaper | null,
+  other: Wallpaper | null,
+): Promise<void> {
+  await AsyncStorage.removeItem(WALLPAPER_STORAGE_KEYS[slot]);
+
+  if (previous && previous.path !== other?.path) {
+    await NexusNative.deleteFile(previous.path).catch(() => false);
+  }
+
   try {
-    await NexusNative.clearWallpapers();
+    await NexusNative.clearWallpaper(slot);
   } catch {
     // The stored reference is already gone; leftover files are harmless.
   }
