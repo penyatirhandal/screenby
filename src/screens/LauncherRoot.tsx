@@ -521,18 +521,32 @@ export function LauncherRoot({
       ? platformMenuGame.game.customLabel || platformMenuGame.game.name
       : undefined;
 
-  const platformInfoPinned = platformInfoGame
-    ? platformGameAsPinned(
-        platformInfoGame,
-        platforms.platforms.find(item => item.id === platformInfoGame.platformId),
-      )
-    : null;
-  const platformEditPinned = platformEditGame
-    ? platformGameAsPinned(
-        platformEditGame,
-        platforms.platforms.find(item => item.id === platformEditGame.platformId),
-      )
-    : null;
+  // Stable identity matters: GameEditSheet resets its form whenever `game`
+  // changes, so a new object on every render would discard the picked cover.
+  const platformInfoPinned = useMemo(
+    () =>
+      platformInfoGame
+        ? platformGameAsPinned(
+            platformInfoGame,
+            platforms.platforms.find(
+              item => item.id === platformInfoGame.platformId,
+            ),
+          )
+        : null,
+    [platformInfoGame, platforms.platforms],
+  );
+  const platformEditPinned = useMemo(
+    () =>
+      platformEditGame
+        ? platformGameAsPinned(
+            platformEditGame,
+            platforms.platforms.find(
+              item => item.id === platformEditGame.platformId,
+            ),
+          )
+        : null,
+    [platformEditGame, platforms.platforms],
+  );
 
   const closeGameMenu = useCallback(() => {
     setMenuGame(null);

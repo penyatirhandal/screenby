@@ -49,10 +49,10 @@ const ROTATION_OPTIONS: Record<
   {label: string; detail: string}
 > = {
   off: {label: 'Mati', detail: 'Rotasi mengikuti pengaturan Android'},
-  landscape: {label: 'Landscape', detail: 'Semua aplikasi terkunci landscape'},
+  landscape: {label: 'Landscape', detail: 'Rotasi sistem dikunci landscape'},
   reverseLandscape: {
     label: 'Landscape terbalik',
-    detail: 'Semua aplikasi terkunci landscape terbalik',
+    detail: 'Rotasi sistem dikunci landscape terbalik',
   },
 };
 
@@ -569,9 +569,11 @@ export function SettingsScreen({
               },
             ]}
           >
-            Kunci orientasi seluruh aplikasi ke landscape atau landscape
-            terbalik. Android akan meminta izin Modify system settings saat
-            fitur diaktifkan, dan mengembalikan rotasi semula saat dimatikan.
+            Kunci rotasi sistem ke landscape atau landscape terbalik. Android
+            akan meminta izin Modify system settings saat fitur diaktifkan, dan
+            mengembalikan rotasi semula saat dimatikan. Aplikasi yang memaksa
+            portrait sendiri tetap bisa menampilkan portrait; Nexus mengembalikan
+            pengaturan sistem saat kamu kembali ke launcher.
           </Text>
           {(Object.keys(ROTATION_OPTIONS) as RotationLockMode[]).map(mode => (
             <OptionRow

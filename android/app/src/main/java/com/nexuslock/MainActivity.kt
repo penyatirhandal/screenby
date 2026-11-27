@@ -26,6 +26,12 @@ class MainActivity : ReactActivity() {
     hideSystemBars()
   }
 
+  override fun onResume() {
+    super.onResume()
+    NexusRotationModule.applyStoredOrientation(this)
+    NexusRotationModule.reapplyStoredSettings(this)
+  }
+
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus) {
