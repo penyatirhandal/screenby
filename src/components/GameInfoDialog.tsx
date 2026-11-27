@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import {Focusable} from '../gamepad/GamepadProvider';
 import {wallpaperUri} from '../services/WallpaperService';
 import {colors} from '../theme/colors';
 import {withAlpha} from '../theme/colorUtils';
@@ -160,14 +161,17 @@ export function GameInfoDialog({
                 INFO GAME
               </Text>
             </View>
-            <Pressable
+            <Focusable
+              id="gameInfo:closeIcon"
+              enabled={visible && game !== null}
+              layer={10}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Tutup info game"
               hitSlop={8}
             >
               <Icon name="close" size={scaled(20)} color={palette.textSecondary} />
-            </Pressable>
+            </Focusable>
           </View>
 
           <ScrollView style={styles.rows} showsVerticalScrollIndicator>
@@ -195,7 +199,10 @@ export function GameInfoDialog({
             </Text>
           </ScrollView>
 
-          <Pressable
+          <Focusable
+            id="gameInfo:close"
+            enabled={visible && game !== null}
+            layer={10}
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Tutup"
@@ -217,7 +224,7 @@ export function GameInfoDialog({
             >
               TUTUP
             </Text>
-          </Pressable>
+          </Focusable>
         </Pressable>
       </Pressable>
     </Modal>

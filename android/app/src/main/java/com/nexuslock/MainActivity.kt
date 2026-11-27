@@ -2,6 +2,8 @@ package com.nexuslock
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -33,6 +35,23 @@ class MainActivity : ReactActivity() {
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
     super.onActivityResult(requestCode, resultCode, data)
     NexusWidgetModule.handleActivityResult(requestCode, resultCode, data)
+  }
+
+  /**
+   * Gamepads send Android key events just like keyboards. We forward them to JS
+   * and consume pad-only buttons so Android focus does not fight our own focus ring.
+   */
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    NexusGamepadModule.onKeyEvent(event)
+    if (NexusGamepadModule.shouldConsumeKey(event)) {
+      return true
+    }
+    return super.dispatchKeyEvent(event)
+  }
+
+  override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+    NexusGamepadModule.onMotionEvent(event)
+    return super.onGenericMotionEvent(event)
   }
 
   /**

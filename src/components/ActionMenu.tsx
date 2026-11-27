@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
+import { Focusable } from '../gamepad/GamepadProvider';
 import { colors } from '../theme/colors';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import { useTypography } from '../theme/TypographyContext';
@@ -84,8 +85,11 @@ export function ActionMenu({
             </Text>
           ) : null}
           {options.map(option => (
-            <Pressable
+            <Focusable
               key={option.label}
+              id={`menu:${option.label}`}
+              enabled={visible && ready}
+              layer={10}
               style={({ pressed }) => [
                 styles.option,
                 pressed && styles.optionPressed,
@@ -121,7 +125,7 @@ export function ActionMenu({
               >
                 {option.label}
               </Text>
-            </Pressable>
+            </Focusable>
           ))}
         </Pressable>
       </Pressable>

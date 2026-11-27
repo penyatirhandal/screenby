@@ -13,6 +13,7 @@ class NexusPackage : ReactPackage {
           NexusNativeModule(reactContext),
           NexusWidgetModule(reactContext),
           NexusMediaModule(reactContext),
+          NexusGamepadModule(reactContext),
       )
 
   override fun createViewManagers(

@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { Focusable } from '../gamepad/GamepadProvider';
 import { wallpaperUri } from '../services/WallpaperService';
 import { NexusNative } from '../services/NexusNative';
 import { colors } from '../theme/colors';
@@ -193,19 +194,25 @@ export function GameEditSheet({
             >
               EDIT GAME
             </Text>
-            <Pressable
+            <Focusable
+              id="gameEdit:close"
+              enabled={visible && game !== null}
+              layer={10}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Tutup editor"
               hitSlop={8}
             >
               <Icon name="close" size={scaled(20)} color={palette.textSecondary} />
-            </Pressable>
+            </Focusable>
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled">
             <View style={styles.iconRow}>
-              <Pressable
+              <Focusable
+                id="gameEdit:icon"
+                enabled={visible && game !== null}
+                layer={10}
                 style={[
                   styles.iconButton,
                   {
@@ -232,7 +239,7 @@ export function GameEditSheet({
                     <ActivityIndicator color={palette.primary} />
                   </View>
                 ) : null}
-              </Pressable>
+              </Focusable>
               <View style={styles.iconHint}>
                 <Text
                   style={[
@@ -247,7 +254,10 @@ export function GameEditSheet({
                   Ketuk ikon untuk memilih gambar dari galeri.
                 </Text>
                 {form.customIconPath ? (
-                  <Pressable
+                  <Focusable
+                    id="gameEdit:restoreIcon"
+                    enabled={visible && game !== null}
+                    layer={10}
                     onPress={() =>
                       setForm(previous => ({ ...previous, customIconPath: undefined }))
                     }
@@ -266,7 +276,7 @@ export function GameEditSheet({
                     >
                       Kembalikan ikon asli
                     </Text>
-                  </Pressable>
+                  </Focusable>
                 ) : null}
               </View>
             </View>
@@ -304,7 +314,10 @@ export function GameEditSheet({
           </ScrollView>
 
           <View style={styles.actions}>
-            <Pressable
+            <Focusable
+              id="gameEdit:delete"
+              enabled={visible && game !== null}
+              layer={10}
               style={({ pressed }) => [
                 styles.deleteButton,
                 pressed && styles.buttonPressed,
@@ -325,9 +338,12 @@ export function GameEditSheet({
               >
                 Delete
               </Text>
-            </Pressable>
+            </Focusable>
             <View style={styles.actionSpacer} />
-            <Pressable
+            <Focusable
+              id="gameEdit:cancel"
+              enabled={visible && game !== null}
+              layer={10}
               style={({ pressed }) => [
                 styles.secondaryButton,
                 { borderColor: palette.glassBorder },
@@ -349,8 +365,11 @@ export function GameEditSheet({
               >
                 Batal
               </Text>
-            </Pressable>
-            <Pressable
+            </Focusable>
+            <Focusable
+              id="gameEdit:save"
+              enabled={visible && game !== null}
+              layer={10}
               style={({ pressed }) => [
                 styles.saveButton,
                 { backgroundColor: palette.primary },
@@ -373,7 +392,7 @@ export function GameEditSheet({
               >
                 Save
               </Text>
-            </Pressable>
+            </Focusable>
           </View>
         </View>
       </KeyboardAvoidingView>

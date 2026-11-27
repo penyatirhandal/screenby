@@ -24,6 +24,7 @@ import {
 } from '../components/Icon';
 import {WallpaperBackdrop} from '../components/WallpaperBackdrop';
 import {WidgetPickerSheet} from '../components/WidgetPickerSheet';
+import {Focusable} from '../gamepad/GamepadProvider';
 import {useBattery} from '../hooks/useBattery';
 import {useClock, type ClockInfo} from '../hooks/useClock';
 import {useNetwork} from '../hooks/useNetwork';
@@ -236,13 +237,15 @@ export function HomeScreen({
               {TABS.map(item => {
                 const active = tab === item.key;
                 return (
-                  <Pressable
+                  <Focusable
                     key={item.key}
+                    id={`tab:${item.key}`}
                     onPress={() => onTabChange(item.key)}
                     accessibilityRole="tab"
                     accessibilityState={{selected: active}}
                     accessibilityLabel={`Tab ${item.label}`}
-                    style={({pressed}) => [
+                    ringRadius={8}
+                    style={({pressed}: {pressed: boolean}) => [
                       styles.tab,
                       {
                         backgroundColor: active
@@ -267,7 +270,7 @@ export function HomeScreen({
                     >
                       {item.label}
                     </Text>
-                  </Pressable>
+                  </Focusable>
                 );
               })}
             </ScrollView>
@@ -339,12 +342,14 @@ export function HomeScreen({
               renderItem={({item: column}) => (
                 <View style={styles.gameColumn}>
                   {column.map(item => (
-                    <Pressable
+                    <Focusable
                       key={item.packageName}
+                      id={`game:${item.packageName}`}
                       onPress={() => onPlay(item)}
                       onLongPress={() => onLongPressGame(item)}
                       accessibilityRole="button"
                       accessibilityLabel={`Mainkan ${displayName(item)}`}
+                      ringRadius={18}
                       style={({pressed}) => [
                         styles.gameCard,
                         {
@@ -384,7 +389,7 @@ export function HomeScreen({
                       >
                         {displayName(item)}
                       </Text>
-                    </Pressable>
+                    </Focusable>
                   ))}
                 </View>
               )}
@@ -417,7 +422,8 @@ export function HomeScreen({
             >
               Buka Apps, tekan tahan aplikasi, lalu pilih Pin ke Games.
             </Text>
-            <Pressable
+            <Focusable
+              id="home:openApps"
               onPress={onOpenApps}
               accessibilityRole="button"
               accessibilityLabel="Buka Apps"
@@ -439,14 +445,19 @@ export function HomeScreen({
               >
                 BUKA APPS
               </Text>
-            </Pressable>
+            </Focusable>
           </View>
         )}
 
         <View style={styles.actionBar}>
-          <ActionButton icon="apps" label="Apps" onPress={onOpenApps} />
-          <ActionButton icon="settings" label="Settings" onPress={onOpenSettings} />
-          <ActionButton icon="search" label="Search" onPress={onOpenApps} />
+          <ActionButton id="action:apps" icon="apps" label="Apps" onPress={onOpenApps} />
+          <ActionButton
+            id="action:settings"
+            icon="settings"
+            label="Settings"
+            onPress={onOpenSettings}
+          />
+          <ActionButton id="action:search" icon="search" label="Search" onPress={onOpenApps} />
         </View>
       </View>
     </View>
@@ -535,6 +546,16 @@ function DesktopCanvas({
     setPickerPoint({
       x: clamp(locationX / canvasWidth - defaultWidth / 2, 0, 1 - defaultWidth),
       y: clamp(locationY / canvasHeight - defaultHeight / 2, 0, 1 - defaultHeight),
+    });
+  };
+
+  const openPickerAtCenter = () => {
+    if (mode) {
+      return;
+    }
+    setPickerPoint({
+      x: (1 - DEFAULT_BUILTIN_SIZE.width) / 2,
+      y: (1 - DEFAULT_BUILTIN_SIZE.height) / 2,
     });
   };
 
@@ -642,15 +663,18 @@ function DesktopCanvas({
 
   return (
     <>
-      <Pressable
+      <Focusable
+        id="desktop:canvas"
+        onPress={openPickerAtCenter}
+        onLongPress={openPicker}
         onLayout={event => {
           const {width: nextWidth, height: nextHeight} = event.nativeEvent.layout;
           setCanvasSize({width: nextWidth, height: nextHeight});
         }}
-        onLongPress={openPicker}
         accessibilityRole="button"
         accessibilityLabel="Area widget Desktop"
         style={styles.canvas}
+        ringRadius={18}
       >
         {items.length === 0 ? (
           <View style={styles.canvasHint} pointerEvents="none">
@@ -686,8 +710,13 @@ function DesktopCanvas({
 
           if (item.kind === 'appwidget') {
             return (
-              <View
+              <Focusable
                 key={item.id}
+                id={`widget:${item.id}`}
+                priority={1}
+                onPress={() => setMenuItem(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Widget ${widgetLabel(item)}`}
                 style={[
                   styles.widgetFrame,
                   positionStyle,
@@ -713,13 +742,16 @@ function DesktopCanvas({
                   }}
                   style={styles.nativeWidget}
                 />
-              </View>
+              </Focusable>
             );
           }
 
           return (
-            <Pressable
+            <Focusable
               key={item.id}
+              id={`widget:${item.id}`}
+              priority={1}
+              onPress={() => setMenuItem(item)}
               onLongPress={() => {
                 flagWidgetGesture();
                 setMenuItem(item);
@@ -743,10 +775,10 @@ function DesktopCanvas({
                 widthPx={pixelWidth}
                 heightPx={pixelHeight}
               />
-            </Pressable>
+            </Focusable>
           );
         })}
-      </Pressable>
+      </Focusable>
 
       {mode ? (
         <View
@@ -1225,11 +1257,13 @@ function Artwork({
 }
 
 function ActionButton({
+  id,
   icon,
   label,
   onPress,
   primary,
 }: {
+  id: string;
   icon: IconName;
   label: string;
   onPress: () => void;
@@ -1238,7 +1272,8 @@ function ActionButton({
   const palette = useLauncherPalette();
   const {fonts, scaled} = useTypography();
   return (
-    <Pressable
+    <Focusable
+      id={id}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -1270,7 +1305,7 @@ function ActionButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </Focusable>
   );
 }
 

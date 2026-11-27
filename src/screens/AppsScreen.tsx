@@ -3,15 +3,17 @@ import {
   Alert,
   FlatList,
   Image,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
+  type FlatListInstance,
+  type TextInputInstance,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
+import { Focusable } from '../gamepad/GamepadProvider';
 import { useLauncherApps } from '../hooks/useLauncherApps';
 import { NexusNative } from '../services/NexusNative';
 import { useLauncherPalette } from '../theme/ThemeContext';
@@ -45,6 +47,8 @@ export function AppsScreen({
   const { apps, loading, launch, refresh } = useLauncherApps();
   const [query, setQuery] = useState('');
   const [menuApp, setMenuApp] = useState<LauncherApp | null>(null);
+  const searchRef = React.useRef<TextInputInstance>(null);
+  const listRef = React.useRef<FlatListInstance>(null);
 
   const pinnedPackages = useMemo(
     () => new Set(pinned.map(game => game.packageName)),
@@ -136,14 +140,15 @@ export function AppsScreen({
           },
         ]}
       >
-        <Pressable
+        <Focusable
+          id="apps:back"
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Kembali ke Home"
           hitSlop={8}
         >
           <Icon name="back" size={scaled(24)} color={palette.textPrimary} />
-        </Pressable>
+        </Focusable>
         <Text
           style={[
             styles.title,
@@ -157,37 +162,48 @@ export function AppsScreen({
           APPS
         </Text>
         <View style={styles.headerSpacer} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Cari aplikasi..."
-          placeholderTextColor={palette.textMuted}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          style={[
-            styles.search,
-            {
-              backgroundColor: palette.surface,
-              borderColor: palette.glassBorder,
-              color: palette.textPrimary,
-              fontFamily: fonts.body,
-              fontSize: scaled(13),
-            },
-          ]}
-          accessibilityLabel="Cari aplikasi"
-        />
-        <Pressable
+        <Focusable
+          id="apps:search"
+          onPress={() => searchRef.current?.focus()}
+          ringRadius={20}
+          accessibilityRole="button"
+          accessibilityLabel="Fokus pencarian aplikasi"
+        >
+          <TextInput
+            ref={searchRef}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Cari aplikasi..."
+            placeholderTextColor={palette.textMuted}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            style={[
+              styles.search,
+              {
+                backgroundColor: palette.surface,
+                borderColor: palette.glassBorder,
+                color: palette.textPrimary,
+                fontFamily: fonts.body,
+                fontSize: scaled(13),
+              },
+            ]}
+            accessibilityLabel="Cari aplikasi"
+          />
+        </Focusable>
+        <Focusable
+          id="apps:settings"
           onPress={onOpenSettings}
           accessibilityRole="button"
           accessibilityLabel="Buka Settings"
           hitSlop={8}
         >
           <Icon name="settings" size={scaled(22)} color={palette.textSecondary} />
-        </Pressable>
+        </Focusable>
       </View>
 
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={item => item.packageName}
         numColumns={columns}
@@ -219,7 +235,8 @@ export function AppsScreen({
           </View>
         }
         renderItem={({ item }) => (
-          <Pressable
+          <Focusable
+            id={`app:${item.packageName}`}
             style={({ pressed }) => [
               styles.app,
               { borderColor: palette.glassBorder },
@@ -227,6 +244,22 @@ export function AppsScreen({
             ]}
             onPress={() => openApp(item)}
             onLongPress={() => setMenuApp(item)}
+            onFocus={() => {
+              const index = filtered.findIndex(
+                candidate => candidate.packageName === item.packageName,
+              );
+              if (index >= 0) {
+                try {
+                  listRef.current?.scrollToIndex({
+                    index,
+                    animated: true,
+                    viewPosition: 0.5,
+                  });
+                } catch {
+                  // The item may have been filtered out while focus was moving.
+                }
+              }
+            }}
             accessibilityRole="button"
             accessibilityLabel={`Buka ${item.label}`}
           >
@@ -280,7 +313,7 @@ export function AppsScreen({
                 <Icon name="pin" size={scaled(10)} color={palette.background} />
               </View>
             ) : null}
-          </Pressable>
+          </Focusable>
         )}
       />
 

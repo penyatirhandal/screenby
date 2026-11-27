@@ -27,6 +27,7 @@ sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Andro
 | Dismiss / Hapus | `Dismiss` melepas pin; `Hapus` di Apps membuka dialog uninstall Android |
 | Dynamic Color | Aksen diambil dari `WallpaperColors` Android 12+; fallback ke palet bawaan |
 | Font & ukuran font | Hack, Inter, Arial (Liberation Sans); preset Kecil–Sangat Besar, berlaku untuk seluruh teks launcher |
+| Gamepad | D-pad/stick kiri untuk fokus, A untuk memilih, B untuk kembali, L1/R1 ganti tab, Start/Select membuka Settings/Apps |
 | Wallpaper | Galeri + Smart Crop; dipakai sebagai latar Home/Lock screen dan bisa diterapkan ke wallpaper sistem agar Dynamic Color berubah |
 | Status OS asli | Jam, tanggal, baterai, jaringan Wi-Fi/seluler/ethernet/VPN |
 
@@ -44,6 +45,25 @@ sistem Android. APK dibangun otomatis melalui **GitHub Actions** — tanpa Andro
 Metadata game (tahun rilis, genre, developer, publisher) diisi manual lewat **Edit** karena
 Android tidak menyediakan data tersebut.
 
+### Kontrol gamepad
+
+| Input | Aksi |
+|---|---|
+| D-pad / stick kiri | Pindah fokus (tab, game, widget, tombol aksi) |
+| A / DPAD_CENTER / Enter | Aktifkan item yang sedang difokuskan |
+| B / Y | Kembali, menutup sheet/menu |
+| L1 / R1 | Ganti tab `DESKTOP` / `GAMES` (kembali ke Home dari halaman lain) |
+| Start | Buka Settings |
+| Select | Buka Apps |
+| Stick analog | Diterjemahkan ke arah D-pad dengan dead zone |
+
+Focus ring ditampilkan saat item dipilih gamepad; touch tetap berfungsi seperti biasa.
+Pada layar kunci, A dapat menggantikan swipe-up (geser tetap didukung).
+
+Untuk gamepad fisik, hubungkan via Bluetooth atau jalankan `scrcpy --gamepad=uhid`
+dengan gamepad tersambung ke komputer. Tanpa gamepad, event Android yang sama bisa
+dikirim lewat `adb shell input keyevent`.
+
 ---
 
 ## Struktur Proyek
@@ -53,6 +73,7 @@ Android tidak menyediakan data tersebut.
 ├── App.tsx
 ├── src/
 │   ├── components/      # ActionMenu, GameEditSheet, Icon, WallpaperSheet, ...
+│   ├── gamepad/         # Event mapping, spatial focus provider, Focusable
 │   ├── hooks/           # useGameLibrary, useLauncherSettings, useLauncherTheme, ...
 │   ├── screens/         # HomeScreen, AppsScreen, SettingsScreen, LauncherRoot
 │   ├── services/        # NexusNative, GameLibraryService, LauncherSettingsService, ...
@@ -60,9 +81,10 @@ Android tidak menyediakan data tersebut.
 │   ├── utils/smartCrop.ts
 │   └── types.ts
 ├── android/app/src/main/
-│   ├── java/com/nexuslock/NexusNativeModule.kt
+│   ├── java/com/nexuslock/NexusNativeModule.kt, NexusGamepadModule.kt
 │   ├── assets/fonts/    # Hack, Inter, Liberation Sans, Material Symbols, ...
 │   └── AndroidManifest.xml
+├── scripts/test-gamepad.sh
 ├── __tests__/
 └── .github/workflows/android-build.yml
 ```
@@ -81,6 +103,25 @@ npm test -- --runInBand
 npm run build:debug      # android/app/build/outputs/apk/debug/app-debug.apk
 npm run build:release    # android/app/build/outputs/apk/release/app-release.apk
 ```
+
+### Menguji gamepad dengan scrcpy
+
+```bash
+chmod +x scripts/test-gamepad.sh
+scripts/test-gamepad.sh android/app/build/outputs/apk/release/app-release.apk
+# atau: npm run test:gamepad -- android/app/build/outputs/apk/release/app-release.apk
+```
+
+Gunakan APK **release** karena APK debug memuat JS dari Metro (`localhost:8081`).
+Jika ingin menguji APK debug, jalankan `npm start` dan `adb reverse tcp:8081 tcp:8081`
+terlebih dahulu.
+
+Skrip ini menyalakan scrcpy (gamepad pass-through lewat `--gamepad=uhid`),
+mengirim rangkaian `KEYCODE_DPAD_*`, `BUTTON_A/B`, `L1/R1`, `START`, `SELECT`,
+mematikan/menyalakan layar untuk menguji layar kunci, lalu menyimpan screenshot
+ke `/tmp/opencode/gamepad-test`. Set `GAMEPAD_MODE=disabled` bila tidak ada
+gamepad fisik di komputer; event masih diinjeksi via `adb keyevent` dan hasilnya
+tetap terlihat di jendela scrcpy.
 
 Build release lokal memakai debug keystore sebagai fallback; jangan dipakai untuk
 distribusi produksi.

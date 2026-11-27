@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import { Focusable } from '../gamepad/GamepadProvider';
 import type { CropState, Wallpaper } from '../types';
 import {
   computeCoverLayout,
@@ -262,7 +263,10 @@ export function WallpaperSheet({
                 </Text>
               </View>
             </View>
-            <Pressable
+            <Focusable
+              id="wallpaper:close"
+              enabled={visible}
+              layer={10}
               onPress={onClose}
               hitSlop={8}
               accessibilityRole="button"
@@ -273,7 +277,7 @@ export function WallpaperSheet({
               ]}
             >
               <Icon name="close" size={19} color={colors.textSecondary} />
-            </Pressable>
+            </Focusable>
           </View>
 
           <View style={styles.body}>
@@ -379,7 +383,10 @@ export function WallpaperSheet({
             </View>
 
             <View style={styles.controls}>
-              <Pressable
+              <Focusable
+                id="wallpaper:pick"
+                enabled={visible}
+                layer={10}
                 onPress={handlePick}
                 disabled={busy}
                 accessibilityRole="button"
@@ -402,7 +409,7 @@ export function WallpaperSheet({
                     ? 'Ganti gambar'
                     : 'Pilih dari Galeri'}
                 </Text>
-              </Pressable>
+              </Focusable>
 
               <Text style={textStyle(styles.hint, 11)}>
                 {wallpaper
@@ -413,7 +420,10 @@ export function WallpaperSheet({
               <Text style={textStyle(styles.zoomLabel, 9, true)}>UKURAN CROP</Text>
 
               <View style={styles.zoomRow}>
-                <Pressable
+                <Focusable
+                  id="wallpaper:zoomOut"
+                  enabled={visible}
+                  layer={10}
                   onPress={() => updateZoom(-0.1)}
                   disabled={!wallpaper || !canZoomOut || busy}
                   accessibilityRole="button"
@@ -425,7 +435,7 @@ export function WallpaperSheet({
                   ]}
                 >
                   <Icon name="zoomOut" size={18} color={colors.textSecondary} />
-                </Pressable>
+                </Focusable>
 
                 <View style={styles.zoomValue}>
                   <Text style={textStyle(styles.zoomValueText, 12, true)}>
@@ -433,7 +443,10 @@ export function WallpaperSheet({
                   </Text>
                 </View>
 
-                <Pressable
+                <Focusable
+                  id="wallpaper:zoomIn"
+                  enabled={visible}
+                  layer={10}
                   onPress={() => updateZoom(0.1)}
                   disabled={!wallpaper || !canZoomIn || busy}
                   accessibilityRole="button"
@@ -445,9 +458,12 @@ export function WallpaperSheet({
                   ]}
                 >
                   <Icon name="zoomIn" size={18} color={colors.textSecondary} />
-                </Pressable>
+                </Focusable>
 
-                <Pressable
+                <Focusable
+                  id="wallpaper:reset"
+                  enabled={visible}
+                  layer={10}
                   onPress={() => setDraft({ ...DEFAULT_CROP })}
                   disabled={!wallpaper || busy}
                   accessibilityRole="button"
@@ -459,7 +475,7 @@ export function WallpaperSheet({
                   ]}
                 >
                   <Icon name="reset" size={17} color={colors.textSecondary} />
-                </Pressable>
+                </Focusable>
               </View>
             </View>
           </View>
@@ -472,7 +488,10 @@ export function WallpaperSheet({
 
           <View style={styles.footer}>
             {wallpaper ? (
-              <Pressable
+              <Focusable
+                id="wallpaper:remove"
+                enabled={visible}
+                layer={10}
                 onPress={handleRemove}
                 disabled={busy}
                 accessibilityRole="button"
@@ -486,13 +505,16 @@ export function WallpaperSheet({
               >
                 <Icon name="trash" size={16} color={colors.danger} />
                 <Text style={textStyle(styles.removeText, 12)}>Hapus</Text>
-              </Pressable>
+              </Focusable>
             ) : (
               <View />
             )}
 
             <View style={styles.footerRight}>
-              <Pressable
+              <Focusable
+                id="wallpaper:cancel"
+                enabled={visible}
+                layer={10}
                 onPress={onClose}
                 disabled={busy}
                 accessibilityRole="button"
@@ -504,9 +526,12 @@ export function WallpaperSheet({
                 ]}
               >
                 <Text style={textStyle(styles.secondaryText, 12.5)}>Batal</Text>
-              </Pressable>
+              </Focusable>
 
-              <Pressable
+              <Focusable
+                id="wallpaper:save"
+                enabled={visible}
+                layer={10}
                 onPress={handleSave}
                 disabled={!canSave}
                 accessibilityRole="button"
@@ -523,7 +548,7 @@ export function WallpaperSheet({
                   <Icon name="check" size={16} color={colors.background} />
                 )}
                 <Text style={textStyle(styles.primaryText, 12.5, true)}>Simpan</Text>
-              </Pressable>
+              </Focusable>
             </View>
           </View>
         </View>

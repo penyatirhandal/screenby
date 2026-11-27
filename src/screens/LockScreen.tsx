@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -16,6 +15,7 @@ import {
 } from '../components/Icon';
 import { SwipeUpUnlock } from '../components/SwipeUpUnlock';
 import { WallpaperBackdrop } from '../components/WallpaperBackdrop';
+import { Focusable } from '../gamepad/GamepadProvider';
 import { useBattery } from '../hooks/useBattery';
 import { useClock } from '../hooks/useClock';
 import { useFlashlight } from '../hooks/useFlashlight';
@@ -189,7 +189,8 @@ export function LockScreen({
               {level >= 0 ? `${level}%` : '--%'}
             </Text>
           </View>
-          <Pressable
+          <Focusable
+            id="lock:settings"
             onPress={onOpenSettings}
             accessibilityRole="button"
             accessibilityLabel="Atur wallpaper"
@@ -201,7 +202,7 @@ export function LockScreen({
             ]}
           >
             <Icon name="wallpaper" size={scaled(18)} color={palette.textSecondary} />
-          </Pressable>
+          </Focusable>
         </View>
 
         <View style={styles.mainRow}>
@@ -292,7 +293,8 @@ export function LockScreen({
 
         <View style={styles.bottomRow}>
           <View style={styles.shortcutSlot}>
-            <Pressable
+            <Focusable
+              id="lock:flashlight"
               onPress={handleFlashlight}
               accessibilityRole="button"
               accessibilityLabel={
@@ -321,21 +323,29 @@ export function LockScreen({
               >
                 Senter
               </Text>
-            </Pressable>
+            </Focusable>
           </View>
 
           <View style={styles.swipeSlot}>
-            <SwipeUpUnlock
-              onUnlock={onUnlock}
-              compact={compact}
-              label="Geser ke atas untuk membuka"
-              icon="lock"
-              accessibilityLabel="Buka launcher"
-            />
+            <Focusable
+              id="lock:unlock"
+              priority={1}
+              onPress={onUnlock}
+              ringRadius={21}
+            >
+              <SwipeUpUnlock
+                onUnlock={onUnlock}
+                compact={compact}
+                label="Geser ke atas untuk membuka"
+                icon="lock"
+                accessibilityLabel="Buka launcher"
+              />
+            </Focusable>
           </View>
 
           <View style={[styles.shortcutSlot, styles.shortcutEnd]}>
-            <Pressable
+            <Focusable
+              id="lock:camera"
               onPress={handleCamera}
               accessibilityRole="button"
               accessibilityLabel="Buka kamera"
@@ -362,7 +372,7 @@ export function LockScreen({
               >
                 Kamera
               </Text>
-            </Pressable>
+            </Focusable>
           </View>
         </View>
       </View>

@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import {Focusable} from '../gamepad/GamepadProvider';
 import {NexusWidgets} from '../services/NexusWidgets';
 import {DESKTOP_WIDGETS} from '../services/LauncherSettingsService';
 import {colors} from '../theme/colors';
@@ -124,7 +125,10 @@ export function WidgetPickerSheet({
             >
               TAMBAH WIDGET
             </Text>
-            <Pressable
+            <Focusable
+              id="widgetPicker:close"
+              enabled={visible && ready}
+              layer={10}
               onPress={onClose}
               disabled={!ready}
               accessibilityRole="button"
@@ -132,7 +136,7 @@ export function WidgetPickerSheet({
               hitSlop={8}
             >
               <Icon name="close" size={scaled(20)} color={palette.textSecondary} />
-            </Pressable>
+            </Focusable>
           </View>
 
           <ScrollView style={styles.list} showsVerticalScrollIndicator>
@@ -150,8 +154,11 @@ export function WidgetPickerSheet({
             </Text>
             <View style={styles.grid}>
               {DESKTOP_WIDGETS.map(widget => (
-                <Pressable
+                <Focusable
                   key={widget}
+                  id={`widgetPicker:builtin:${widget}`}
+                  enabled={visible && ready}
+                  layer={10}
                   onPress={() => choose(() => onSelectBuiltin(widget))}
                   disabled={!ready}
                   accessibilityRole="button"
@@ -179,7 +186,7 @@ export function WidgetPickerSheet({
                   >
                     {BUILTIN_LABELS[widget]}
                   </Text>
-                </Pressable>
+                </Focusable>
               ))}
             </View>
 
@@ -239,8 +246,11 @@ export function WidgetPickerSheet({
             ) : null}
             <View style={styles.grid}>
               {providers.map(provider => (
-                <Pressable
+                <Focusable
                   key={provider.provider}
+                  id={`widgetPicker:provider:${provider.provider}`}
+                  enabled={visible && ready}
+                  layer={10}
                   onPress={() => choose(() => onSelectProvider(provider))}
                   disabled={!ready}
                   accessibilityRole="button"
@@ -269,7 +279,7 @@ export function WidgetPickerSheet({
                   >
                     {provider.label}
                   </Text>
-                </Pressable>
+                </Focusable>
               ))}
             </View>
           </ScrollView>

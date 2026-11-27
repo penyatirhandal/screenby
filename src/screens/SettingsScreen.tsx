@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from 'react-native';
 import { Icon } from '../components/Icon';
 import { WallpaperSheet } from '../components/WallpaperSheet';
+import { Focusable } from '../gamepad/GamepadProvider';
 import { useLauncherPalette } from '../theme/ThemeContext';
 import {
   FONT_OPTIONS,
@@ -47,6 +49,8 @@ interface SettingsScreenProps {
   onSaveCrop: (crop: CropState) => Promise<void>;
   onRemoveWallpaper: () => Promise<void>;
   dynamicColorAvailable: boolean;
+  wallpaperSheetVisible: boolean;
+  onWallpaperSheetVisibilityChange: (visible: boolean) => void;
 }
 
 export function SettingsScreen({
@@ -61,11 +65,47 @@ export function SettingsScreen({
   onSaveCrop,
   onRemoveWallpaper,
   dynamicColorAvailable,
+  wallpaperSheetVisible,
+  onWallpaperSheetVisibilityChange,
 }: SettingsScreenProps): React.JSX.Element | null {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
-  const [sheetVisible, setSheetVisible] = useState(false);
   const [applying, setApplying] = useState(false);
+  const scrollRef = React.useRef<ScrollViewInstance>(null);
+  const scrollOffset = React.useRef(0);
+  const optionRefs = React.useRef(new Map<string, ViewInstance>());
+
+  const setOptionRef =
+    (id: string) => (instance: ViewInstance | null) => {
+      if (instance) {
+        optionRefs.current.set(id, instance);
+      } else {
+        optionRefs.current.delete(id);
+      }
+    };
+
+  const revealOption = (id: string) => {
+    const view = optionRefs.current.get(id);
+    const container = scrollRef.current;
+    if (!view || !container) {
+      return;
+    }
+    view.measure((_x, _y, _width, height, _pageX, pageY) => {
+      container.measure(
+        (_cx, _cy, _cw, containerHeight, _containerPageX, containerPageY) => {
+          const top = containerPageY + 16;
+          const bottom = containerPageY + containerHeight - 16;
+          let nextOffset = scrollOffset.current;
+          if (pageY < top) {
+            nextOffset -= top - pageY;
+          } else if (pageY + height > bottom) {
+            nextOffset += pageY + height - bottom;
+          }
+          container.scrollTo({y: Math.max(0, nextOffset), animated: true});
+        },
+      );
+    });
+  };
 
   if (!visible) {
     return null;
@@ -73,7 +113,7 @@ export function SettingsScreen({
 
   const applyWallpaper = async () => {
     if (!wallpaper) {
-      setSheetVisible(true);
+      onWallpaperSheetVisibilityChange(true);
       return;
     }
     setApplying(true);
@@ -98,14 +138,15 @@ export function SettingsScreen({
   return (
     <View style={[StyleSheet.absoluteFill, styles.black]}>
       <View style={styles.header}>
-        <Pressable
+        <Focusable
+          id="settings:back"
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Kembali ke Home"
           hitSlop={8}
         >
           <Icon name="back" size={scaled(24)} color={palette.textPrimary} />
-        </Pressable>
+        </Focusable>
         <Text
           style={[
             styles.title,
@@ -120,7 +161,14 @@ export function SettingsScreen({
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollRef}
+        onScroll={event => {
+          scrollOffset.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={styles.content}
+      >
         <Section title="TEMA" icon="palette">
           <Text
             style={[
@@ -163,13 +211,14 @@ export function SettingsScreen({
             </Text>
           </View>
           <View style={styles.buttonRow}>
-            <Pressable
+            <Focusable
+              id="settings:pickWallpaper"
               style={({ pressed }) => [
                 styles.button,
                 { borderColor: palette.glassBorder },
                 pressed && styles.pressed,
               ]}
-              onPress={() => setSheetVisible(true)}
+              onPress={() => onWallpaperSheetVisibilityChange(true)}
               accessibilityRole="button"
               accessibilityLabel="Pilih wallpaper"
             >
@@ -185,8 +234,9 @@ export function SettingsScreen({
               >
                 Pilih wallpaper
               </Text>
-            </Pressable>
-            <Pressable
+            </Focusable>
+            <Focusable
+              id="settings:applyWallpaper"
               style={({ pressed }) => [
                 styles.button,
                 { borderColor: palette.primaryBorder },
@@ -209,7 +259,7 @@ export function SettingsScreen({
               >
                 {applying ? 'Menerapkan...' : 'Pakai sebagai wallpaper sistem'}
               </Text>
-            </Pressable>
+            </Focusable>
           </View>
           {wallpaper ? (
             <Text
@@ -232,9 +282,12 @@ export function SettingsScreen({
           {(Object.keys(FONT_OPTIONS) as FontChoice[]).map(choice => (
             <OptionRow
               key={choice}
+              id={`settings:font:${choice}`}
               label={FONT_OPTIONS[choice].label}
               selected={settings.font === choice}
               onPress={() => onSetFont(choice)}
+              viewRef={setOptionRef(`settings:font:${choice}`)}
+              onFocus={() => revealOption(`settings:font:${choice}`)}
             />
           ))}
         </Section>
@@ -243,9 +296,12 @@ export function SettingsScreen({
           {(Object.keys(FONT_SIZE_OPTIONS) as FontSizeChoice[]).map(size => (
             <OptionRow
               key={size}
+              id={`settings:fontSize:${size}`}
               label={FONT_SIZE_OPTIONS[size].label}
               selected={settings.fontSize === size}
               onPress={() => onSetFontSize(size)}
+              viewRef={setOptionRef(`settings:fontSize:${size}`)}
+              onFocus={() => revealOption(`settings:fontSize:${size}`)}
             />
           ))}
         </Section>
@@ -254,10 +310,13 @@ export function SettingsScreen({
           {(Object.keys(GAME_ICON_SIZE_OPTIONS) as GameIconSize[]).map(size => (
             <OptionRow
               key={size}
+              id={`settings:gameIconSize:${size}`}
               label={GAME_ICON_SIZE_OPTIONS[size].label}
               detail={GAME_ICON_SIZE_OPTIONS[size].detail}
               selected={settings.gameIconSize === size}
               onPress={() => onSetGameIconSize(size)}
+              viewRef={setOptionRef(`settings:gameIconSize:${size}`)}
+              onFocus={() => revealOption(`settings:gameIconSize:${size}`)}
             />
           ))}
         </Section>
@@ -310,9 +369,9 @@ export function SettingsScreen({
       </ScrollView>
 
       <WallpaperSheet
-        visible={sheetVisible}
+        visible={wallpaperSheetVisible}
         wallpaper={wallpaper}
-        onClose={() => setSheetVisible(false)}
+        onClose={() => onWallpaperSheetVisibilityChange(false)}
         onPick={onPickWallpaper}
         onSave={onSaveCrop}
         onRemove={onRemoveWallpaper}
@@ -363,21 +422,30 @@ function Section({
 }
 
 function OptionRow({
+  id,
   label,
   detail,
   selected,
   onPress,
+  viewRef,
+  onFocus,
 }: {
+  id: string;
   label: string;
   detail?: string;
   selected: boolean;
   onPress: () => void;
+  viewRef?: React.Ref<ViewInstance>;
+  onFocus?: () => void;
 }): React.JSX.Element {
   const palette = useLauncherPalette();
   const { fonts, scaled } = useTypography();
   return (
-    <Pressable
+    <Focusable
+      id={id}
+      viewRef={viewRef}
       onPress={onPress}
+      onFocus={onFocus}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       accessibilityLabel={label}
@@ -414,7 +482,7 @@ function OptionRow({
       {selected ? (
         <Icon name="check" size={scaled(18)} color={palette.primary} />
       ) : null}
-    </Pressable>
+    </Focusable>
   );
 }
 

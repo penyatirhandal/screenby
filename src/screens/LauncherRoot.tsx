@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { ActionMenu, type MenuOption } from '../components/ActionMenu';
 import { GameEditSheet, type GameEditPatch } from '../components/GameEditSheet';
 import { GameInfoDialog } from '../components/GameInfoDialog';
+import { GamepadProvider } from '../gamepad/GamepadProvider';
 import { useGameLibrary } from '../hooks/useGameLibrary';
 import type { LauncherSettingsController } from '../hooks/useLauncherSettings';
 import { useWallpaper } from '../hooks/useWallpaper';
@@ -33,6 +34,7 @@ export function LauncherRoot({
   const [editing, setEditing] = useState<PinnedGame | null>(null);
   const [menuGame, setMenuGame] = useState<PinnedGame | null>(null);
   const [infoGame, setInfoGame] = useState<PinnedGame | null>(null);
+  const [wallpaperSheetOpen, setWallpaperSheetOpen] = useState(false);
   const library = useGameLibrary();
   const wallpaper = useWallpaper();
 
@@ -40,6 +42,7 @@ export function LauncherRoot({
     setMenuGame(null);
     setEditing(null);
     setInfoGame(null);
+    setWallpaperSheetOpen(false);
     setHomeTab('desktop');
     setScreen('lock');
   }, []);
@@ -67,30 +70,43 @@ export function LauncherRoot({
     };
   }, [showLock]);
 
+  const handleBack = useCallback(() => {
+    if (screen === 'lock') {
+      return;
+    }
+    if (menuGame) {
+      setMenuGame(null);
+      return;
+    }
+    if (editing) {
+      setEditing(null);
+      return;
+    }
+    if (infoGame) {
+      setInfoGame(null);
+      return;
+    }
+    if (screen === 'settings' && wallpaperSheetOpen) {
+      setWallpaperSheetOpen(false);
+      return;
+    }
+    if (screen !== 'home') {
+      setWallpaperSheetOpen(false);
+      setScreen('home');
+    }
+    // A launcher never closes on Back.
+  }, [editing, infoGame, menuGame, screen, wallpaperSheetOpen]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
-        if (screen === 'lock') {
-          return true;
-        }
-        if (editing) {
-          setEditing(null);
-          return true;
-        }
-        if (infoGame) {
-          setInfoGame(null);
-          return true;
-        }
-        if (screen !== 'home') {
-          setScreen('home');
-        }
-        // A launcher never closes on Back.
+        handleBack();
         return true;
       },
     );
     return () => subscription.remove();
-  }, [editing, infoGame, screen]);
+  }, [handleBack]);
 
   const unlock = useCallback(() => {
     setHomeTab('desktop');
@@ -145,6 +161,33 @@ export function LauncherRoot({
     await theme.refresh();
   }, [theme]);
 
+  const gamepadHandlers = useMemo(
+    () => ({
+      onBack: handleBack,
+      onShoulder: (side: 'left' | 'right') => {
+        if (screen === 'home') {
+          setHomeTab(side === 'left' ? 'desktop' : 'games');
+        } else if (screen !== 'lock') {
+          setWallpaperSheetOpen(false);
+          setScreen('home');
+        }
+      },
+      onStart: () => {
+        if (screen !== 'lock') {
+          setWallpaperSheetOpen(false);
+          setScreen('settings');
+        }
+      },
+      onSelect: () => {
+        if (screen !== 'lock') {
+          setWallpaperSheetOpen(false);
+          setScreen('apps');
+        }
+      },
+    }),
+    [handleBack, screen],
+  );
+
   const dynamicColorAvailable =
     Platform.OS === 'android' && Number(Platform.Version) >= 31;
 
@@ -181,37 +224,54 @@ export function LauncherRoot({
     : [];
 
   return (
-    <>
-      <HomeScreen
-        games={library.games}
-        tab={homeTab}
-        onTabChange={setHomeTab}
-        desktopItems={settings.settings.desktopItems}
-        gameIconSize={settings.settings.gameIconSize}
-        wallpaper={wallpaper.wallpaper}
-        onOpenApps={() => setScreen('apps')}
-        onOpenSettings={() => setScreen('settings')}
-        onPlay={game => play(game)}
-        onLongPressGame={setMenuGame}
-        onAddBuiltinWidget={settings.addBuiltinWidget}
-        onAddAppWidget={settings.addAppWidget}
-        onUpdateWidget={settings.updateWidget}
-        onRemoveWidget={settings.removeWidget}
-      />
+    <GamepadProvider handlers={gamepadHandlers}>
+      {screen === 'home' ? (
+        <HomeScreen
+          games={library.games}
+          tab={homeTab}
+          onTabChange={setHomeTab}
+          desktopItems={settings.settings.desktopItems}
+          gameIconSize={settings.settings.gameIconSize}
+          wallpaper={wallpaper.wallpaper}
+          onOpenApps={() => {
+            setWallpaperSheetOpen(false);
+            setScreen('apps');
+          }}
+          onOpenSettings={() => {
+            setWallpaperSheetOpen(false);
+            setScreen('settings');
+          }}
+          onPlay={game => play(game)}
+          onLongPressGame={setMenuGame}
+          onAddBuiltinWidget={settings.addBuiltinWidget}
+          onAddAppWidget={settings.addAppWidget}
+          onUpdateWidget={settings.updateWidget}
+          onRemoveWidget={settings.removeWidget}
+        />
+      ) : null}
 
       {screen === 'lock' ? (
         <LockScreen
           wallpaper={wallpaper.wallpaper}
           onUnlock={unlock}
-          onOpenSettings={() => setScreen('settings')}
+          onOpenSettings={() => {
+            setWallpaperSheetOpen(false);
+            setScreen('settings');
+          }}
         />
       ) : null}
 
       <AppsScreen
         visible={screen === 'apps'}
         pinned={library.games}
-        onClose={() => setScreen('home')}
-        onOpenSettings={() => setScreen('settings')}
+        onClose={() => {
+          setWallpaperSheetOpen(false);
+          setScreen('home');
+        }}
+        onOpenSettings={() => {
+          setWallpaperSheetOpen(false);
+          setScreen('settings');
+        }}
         onPin={pin}
         onUnpin={library.unpin}
         onLaunched={library.recordPlay}
@@ -219,7 +279,10 @@ export function LauncherRoot({
 
       <SettingsScreen
         visible={screen === 'settings'}
-        onClose={() => setScreen('home')}
+        onClose={() => {
+          setWallpaperSheetOpen(false);
+          setScreen('home');
+        }}
         settings={settings.settings}
         onSetFont={settings.setFont}
         onSetFontSize={settings.setFontSize}
@@ -232,6 +295,8 @@ export function LauncherRoot({
         }}
         onRemoveWallpaper={wallpaper.remove}
         dynamicColorAvailable={dynamicColorAvailable}
+        wallpaperSheetVisible={wallpaperSheetOpen}
+        onWallpaperSheetVisibilityChange={setWallpaperSheetOpen}
       />
 
       <GameEditSheet
@@ -254,6 +319,6 @@ export function LauncherRoot({
         options={menuOptions}
         onClose={() => setMenuGame(null)}
       />
-    </>
+    </GamepadProvider>
   );
 }
